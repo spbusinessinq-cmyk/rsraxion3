@@ -1,0 +1,73 @@
+Perform the next refinement pass on the existing RSR AXION app.
+
+Do not redesign the app.
+Do not rebuild the UI.
+Do not break existing archive, brief, export, print, queue, or styling behavior.
+
+This pass must focus only on one thing:
+
+MOVE SIGNAL INGESTION OUT OF THE BROWSER AND INTO A SERVER/API LAYER SO LIVE FEEDS WORK RELIABLY IN DEPLOYMENT.
+
+GOALS
+
+1. Create a server-side signal ingestion route
+- Add a server/API endpoint for signal pulling
+- The frontend should no longer fetch RSS/news feeds directly from the browser
+- The browser should call a local app endpoint instead, for example:
+  /api/signals
+- The server/API route should fetch the external feeds, normalize them, deduplicate them, score them, and return clean JSON to the frontend
+
+2. Eliminate browser-side feed failures
+- The current live deployment falls back because browser-side feed requests are failing or being blocked
+- Fix this by moving feed fetching off the client and into the server/API layer
+- Preserve the fallback system only as a true fallback if server-side ingestion fails
+
+3. Preserve current ingestion logic
+- Keep the current signal domains and scoring structure intact:
+  - world / geopolitics
+  - defense / security
+  - markets / energy / shipping
+  - cyber / infrastructure
+  - domestic policy
+- Keep deduplication
+- Keep signal normalization
+- Keep ranking/scoring
+- Keep fallback behavior only if live ingestion truly fails
+
+4. Increase live signal reliability and volume
+- The live deployed app should reliably ingest a larger real signal set
+- Target roughly 50–80 clean signals per pull cycle in live deployment
+- Continue using:
+  - broader feed coverage
+  - per-feed timeout protection
+  - overall timeout protection
+  - exact or near-exact deduplication without being too aggressive
+
+5. Frontend behavior
+- Update Pull Signals so it calls the new local API/server route instead of external feeds directly
+- Preserve the current UI and queue behavior
+- Preserve live signal count display
+- Preserve verified / used / excluded / pinned workflow
+
+6. Preserve current outputs
+Do not break:
+- Daily Brief
+- Weekly Brief
+- Quick Brief
+- Article
+- Bulletin
+- Archive
+- Exports
+- Print
+- Seal / branding / boot screen
+- Current tactical styling
+
+7. Final intent
+This pass is only about making live signal pulling reliable in deployment.
+The app already looks right.
+The app already works.
+This pass should remove the “Fallback mode — live feeds unavailable” issue by moving ingestion to a server/API layer.
+
+If needed, choose the lightest server-side approach supported by the current stack so the existing deployed app can still be built and run cleanly.
+
+Do not change the visual design in this pass — only fix live signal ingestion reliability by moving feed fetching to a server/API route.

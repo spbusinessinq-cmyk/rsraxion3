@@ -1,0 +1,62 @@
+Perform one final UI cleanup pass on the existing RSR AXION app.
+
+Do NOT redesign the app.
+Do NOT change the architecture.
+Do NOT touch signal ingestion, scoring, brief generation, exports, or deployment config.
+
+This pass is ONLY for archive layout polish and scrollbar cleanup.
+
+GOALS
+
+1. Fix archive list text overlap
+- In the Intelligence Archive list, archive cards are overlapping vertically
+- Titles and metadata are colliding between rows
+- Each archive item must have a stable fixed row height or a clean min-height
+- Title should sit on its own line
+- Metadata line (date + mode + severity) should sit below it cleanly
+- Add enough vertical padding so rows never visually stack into each other
+- Keep the current compact tactical style, but make it readable
+
+2. Fix archive list spacing
+- Archive entries should align consistently
+- Preserve colored severity dot / status indicator
+- Preserve selected-state highlight
+- Ensure no text from one archive item bleeds into the next item
+
+3. Fix selected archive detail readability
+- Keep the selected archive detail panel readable
+- Preserve current control row:
+  Save / Star / Export / Delete
+- Preserve metadata chips
+- Preserve preview text
+- Improve spacing slightly if needed, but do not redesign it
+
+4. Fix scrollbars
+- The current scrollbar presentation looks rough and distracting
+- Style all major scrollable areas so they feel intentional and match the tactical interface
+- Apply cleaner scrollbar styling to:
+  - archive list
+  - archive detail preview
+  - any major side-panel scrollers
+- Use slim, dark scrollbars with subtle thumb contrast
+- Remove ugly bright/default scrollbar appearance where possible
+- Keep them visible and usable
+
+5. Preserve everything else
+Do NOT break:
+- Pull Signals
+- Run AXION
+- Quick Brief
+- Article
+- Bulletin
+- Archive actions
+- Export / Print
+- Static deployment
+- Current tactical theme
+
+FINAL INTENT
+
+This is the final archive/UI cleanup pass only.
+The app is already working.
+Do not rebuild anything.
+Just make the archive list rows stop overlapping and make the scrollbars look clean and intentional.

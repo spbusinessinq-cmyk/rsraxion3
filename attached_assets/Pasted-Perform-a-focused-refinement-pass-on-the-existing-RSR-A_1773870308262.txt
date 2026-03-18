@@ -1,0 +1,220 @@
+Perform a focused refinement pass on the existing RSR AXION application.
+
+Do NOT rebuild the system. 
+Do NOT change architecture. 
+Do NOT modify ingestion, filtering, scoring, archive behavior, exports, or deployment.
+
+This pass is strictly a quality + design + intelligence refinement pass.
+
+==================================================
+1. VISUAL IDENTITY — TACTICAL REFINEMENT
+==================================================
+
+Push AXION into a sharper, premium intelligence system aesthetic.
+
+Requirements:
+- near-black base (deeper than current)
+- stronger panel separation
+- subtle but intentional purple accent (no neon overload)
+- soft glow ONLY on active elements
+- eliminate washed-out gray tones
+- increase contrast for readability
+
+Refinements:
+- Header (RSR AXION) should feel more dominant and high-end
+- Active buttons (Daily / Weekly / Run AXION) should have a faint illuminated edge
+- Panels should feel more “contained” (clean borders, slight depth)
+- Improve spacing so sections breathe more
+- Maintain mobile responsiveness
+
+DO NOT:
+- add hacker-style animations
+- add noise textures
+- overuse glow
+- clutter the UI
+
+Target feel:
+Internal government / defense-grade system, modernized.
+
+==================================================
+2. EXECUTIVE BRIEF — STRUCTURE REWRITE
+==================================================
+
+Current reports are too headline-heavy and repetitive.
+
+Shift AXION from:
+“listing signals”
+
+to:
+“explaining meaning”
+
+All briefs (Daily / Weekly / Quick) must follow this structure:
+
+1. Executive Summary
+2. Threat Posture Summary
+3. Top 3 Priority Signals
+4. Pattern Analysis
+5. Strategic Interpretation
+6. Operator Takeaway
+7. Forward Watch Indicators
+8. Supporting Signals (compact section)
+
+==================================================
+3. EXECUTIVE SUMMARY — UPGRADE
+==================================================
+
+Must answer immediately:
+- what changed
+- why it matters
+- what direction the system is moving
+
+Rules:
+- 4–6 sentences max
+- no generic phrasing
+- must reference system-level behavior (not just events)
+- should feel like a real intelligence overview
+
+==================================================
+4. TOP 3 SIGNALS — HARD LIMIT
+==================================================
+
+Only the top 3 signals receive full analysis.
+
+Each signal must follow:
+
+SIGNAL — [DOMAIN] — CONFIDENCE
+
+What happened:
+(clear, short)
+
+Why it matters:
+(connect to system impact, not generic explanation)
+
+System impact:
+(what domains are affected)
+
+Forward outlook:
+(what to watch next, concrete)
+
+Rules:
+- no long paragraphs
+- no fluff
+- no repetition between sections
+- must feel precise and intentional
+
+==================================================
+5. SUPPORTING SIGNALS SECTION
+==================================================
+
+All remaining signals move to a lower section.
+
+Format:
+- headline
+- 1-line relevance
+- optional domain / confidence
+
+Purpose:
+- preserve breadth without cluttering the brief
+
+==================================================
+6. PATTERN ANALYSIS — STRENGTHEN
+==================================================
+
+Must identify:
+- cross-domain overlap
+- whether signals are isolated or forming patterns
+- type of pattern:
+  - convergence
+  - fragmentation
+  - escalation
+  - stabilization
+
+Keep concise but analytical.
+
+==================================================
+7. STRATEGIC INTERPRETATION — CORE INTELLIGENCE
+==================================================
+
+This is the most important section.
+
+Explain:
+- what the system believes is happening at a higher level
+- how stable or unstable the environment is
+- whether signals indicate transition or noise
+
+Tone:
+- calm
+- disciplined
+- zero hype
+- authoritative
+
+==================================================
+8. OPERATOR TAKEAWAY — DIRECT
+==================================================
+
+Short. Clear. Actionable.
+
+1–3 sentences max.
+
+Must answer:
+“What should the reader walk away understanding?”
+
+==================================================
+9. FORWARD WATCH INDICATORS — CONCRETE
+==================================================
+
+No vague language.
+
+Include:
+- specific developments to monitor
+- escalation triggers
+- stabilization signals
+
+==================================================
+10. WRITING QUALITY RULES
+==================================================
+
+Use:
+- precise language
+- system-level reasoning
+- cause → effect → implication flow
+
+Avoid:
+- generic summaries
+- filler language
+- repetitive phrasing
+- over-explaining obvious facts
+
+==================================================
+11. PRESERVE SYSTEM INTEGRITY
+==================================================
+
+Do NOT break:
+- Pull Signals
+- Run AXION
+- Quick Brief
+- Article
+- Bulletin
+- archive
+- exports
+- print
+- deployment
+- UI structure
+
+==================================================
+12. FINAL INTENT
+==================================================
+
+AXION should feel like:
+
+A real internal intelligence briefing system.
+
+Not a news feed.
+Not a summary tool.
+
+It must clearly answer:
+- what matters
+- why it matters
+- what happens next
+
+while maintaining a sharp, controlled, premium interface.

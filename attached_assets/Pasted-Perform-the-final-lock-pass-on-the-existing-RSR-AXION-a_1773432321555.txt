@@ -1,0 +1,93 @@
+Perform the final lock pass on the existing RSR AXION app.
+
+This is the last pass.
+Do not redesign the app.
+Do not rebuild architecture.
+Preserve all current working functionality.
+
+The app already works. This pass must focus only on final operational fixes.
+
+GOALS
+
+1. Increase signal pull volume
+- Raise the number of raw signals AXION ingests per cycle.
+- Target approximately 50 to 80 raw pulled signals per cycle.
+- Increase the number of items collected from each source/feed.
+- Expand feed coverage if needed across:
+  - world / geopolitics
+  - defense / security
+  - markets / energy / shipping
+  - cyber / infrastructure
+  - domestic policy
+- Keep signal quality disciplined:
+  - remove exact duplicates
+  - allow useful overlap from different sources
+  - do not flood the queue with junk
+- Preserve the current workflow:
+  - AXION can pull many raw signals
+  - then score / rank / cluster them
+  - then use only the strongest subset in briefs
+- Make sure the live signal count in the dashboard accurately reflects the larger intake
+
+2. Fix archive / saved brief card presentation
+- The saved/archive brief cards are still visually inconsistent and slightly bugged.
+- Make them fully congruent:
+  - consistent card height
+  - consistent width behavior
+  - consistent spacing
+  - consistent selected state
+  - clean hierarchy for title / date / mode / threat
+- Ensure archive cards align cleanly with the selected detail viewer
+- Remove any awkward spacing or broken visual rhythm in the archive list
+- Preserve all archive behavior and filters
+
+3. Improve seal visibility
+- Keep the seal integrated in the app
+- Make it more visible and intentional without becoming flashy
+
+A. Boot screen
+- Increase seal size moderately
+- Make it easier to see
+- Keep it premium and restrained
+- Do not overpower the title
+
+B. Header
+- Increase header seal visibility slightly
+- It is currently too faint/small to be noticed
+- Keep it subtle but clearly present beside the RSR AXION wordmark
+
+C. Document watermark
+- Keep the watermark subtle in the viewer
+- Readability must remain unaffected
+
+4. Preserve all existing functionality
+Do not break:
+- boot screen
+- pull signals
+- run axion
+- quick brief
+- article
+- bulletin
+- archive filters
+- save / star / export / delete
+- exports
+- print
+- queue behavior
+- pin behavior
+- current tactical styling
+
+5. Preserve current visual direction
+- keep the dark tactical intelligence aesthetic
+- keep restrained purple accent
+- keep threat colors intact
+- do not reintroduce bright neon UI
+
+6. Final intent
+This is the final lock pass for daily internal use.
+The system should finish this pass with:
+- higher real signal volume
+- clean archive card presentation
+- seal visibility that feels intentional
+- no broken workflows
+
+Do not introduce any new unfinished systems in this pass — only finalize signal volume, archive card consistency, and seal visibility.

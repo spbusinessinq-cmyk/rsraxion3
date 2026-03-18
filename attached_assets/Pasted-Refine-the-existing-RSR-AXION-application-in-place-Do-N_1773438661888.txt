@@ -1,0 +1,204 @@
+Refine the existing RSR AXION application in place.
+
+Do NOT redesign the app.
+Do NOT rebuild the architecture.
+Preserve all current UI, layout, styling, and working functionality.
+
+The goal of this pass is to REMOVE the backend dependency and implement a browser-based signal ingestion system so AXION can run entirely as a static deployment (EdgeOne / CDN hosting) while pulling approximately 250–320 global signals.
+
+All current features must remain operational:
+- Pull Signals
+- Run AXION
+- Quick Brief
+- Article
+- Bulletin
+- Archive
+- Export / Print
+- Boot screen
+- Tactical UI styling
+
+==================================================
+1. REMOVE BACKEND DEPENDENCY
+==================================================
+
+The application must no longer rely on:
+
+/api/signals
+
+Remove any requirement for a Node server or external backend service.
+
+Replace the current signal ingestion with a client-side function called:
+
+collectSignals()
+
+The Pull Signals button must call collectSignals() directly in the browser.
+
+==================================================
+2. IMPLEMENT MULTI-SOURCE OSINT INGESTION
+==================================================
+
+Use RSS feeds converted through rss2json so browser CORS does not block requests.
+
+Use request format like:
+
+fetch(`https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(feedUrl)}`)
+
+Add a feed list covering these source categories:
+
+GLOBAL NEWS
+- Reuters World
+- BBC World
+- Associated Press
+- Al Jazeera
+- Financial Times
+- Bloomberg World
+
+GEOPOLITICS
+- Council on Foreign Relations
+- War on the Rocks
+- Foreign Policy
+- Defense News
+
+ECONOMIC SIGNALS
+- IMF News
+- World Bank Updates
+- OECD Economic Outlook
+
+SECURITY / CONFLICT
+- Institute for the Study of War
+- NATO Newsroom
+- Defense One
+- Military Times
+
+TECHNOLOGY / INFRASTRUCTURE
+- TechCrunch
+- Ars Technica
+- Wired Security
+
+ENERGY / COMMODITIES
+- OilPrice
+- EIA News
+- OPEC Updates
+
+MARKETS
+- MarketWatch
+- Bloomberg Markets
+- Reuters Markets
+
+CYBER / SECURITY
+- Krebs on Security
+- Bleeping Computer
+- Dark Reading
+
+==================================================
+3. SIGNAL INGESTION TARGET
+==================================================
+
+Target approximately 250–320 total signals.
+
+Implementation rules:
+- Fetch all feeds in parallel using Promise.all()
+- Pull 10–15 newest items from each feed
+- Flatten all feed results into one signal array
+- Remove duplicates using normalized title hashing and URL dedupe
+- Sort by timestamp descending
+- Cap final list at 300 signals
+
+==================================================
+4. SIGNAL STRUCTURE
+==================================================
+
+Keep AXION’s current signal structure compatible with the existing scoring and brief generation system.
+
+Each signal should contain:
+- title
+- source
+- timestamp
+- category
+- summary
+- url
+
+If category is not available from the feed, infer it from source/domain using:
+- geopolitics
+- markets
+- defense
+- cyber
+- infrastructure
+- energy
+- policy
+- general
+
+==================================================
+5. FEED FAILURE HANDLING
+==================================================
+
+Do not let one broken feed crash the pull.
+
+Requirements:
+- each feed fails independently
+- failed feeds are skipped
+- successful feeds still return signals
+- if some feeds fail, still use the successful results
+- only use fallback mode if ALL feed pulls fail
+
+==================================================
+6. DASHBOARD COUNTERS
+==================================================
+
+Preserve and update the current dashboard counters:
+
+- LIVE SIGNALS = total final signals loaded
+- RSR VERIFIED = signals passing current verification/scoring threshold
+- USED IN BRIEF = signals selected in current synthesis
+- CONFIDENCE = average or existing confidence logic
+
+The dashboard should no longer show “Fallback mode” unless all source pulls fail.
+
+==================================================
+7. DEBUG VISIBILITY
+==================================================
+
+Keep lightweight debug information in the existing pull flow.
+
+After a pull, store or log:
+- successFeeds
+- failFeeds
+- rawCount
+- finalCount
+- elapsed time
+
+This can stay in console logging and/or existing lightweight debug display.
+
+==================================================
+8. PRESERVE CURRENT AXION LOGIC
+==================================================
+
+Do NOT break:
+- current scoring logic
+- current pattern detection
+- current threat posture logic
+- archive behavior
+- save / star / export / delete
+- article generation
+- bulletin generation
+- daily / weekly / quick brief generation
+- print flow
+- seal / branding / boot screen
+- tactical styling
+
+This pass is only for replacing backend ingestion with a browser-safe static deployment ingestion layer.
+
+==================================================
+9. FINAL INTENT
+==================================================
+
+The finished app must:
+- run entirely as a static frontend
+- be deployable on EdgeOne with no backend server
+- pull 250–320 signals directly from public OSINT feeds
+- preserve the current AXION dashboard and intelligence workflow
+- eliminate the need for Replit/Render/Node backend hosting
+
+Do not redesign the interface.
+Do not remove working features.
+Only replace the signal ingestion system with a static browser-based multi-feed collector.

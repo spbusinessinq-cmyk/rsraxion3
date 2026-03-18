@@ -1,0 +1,81 @@
+Perform one final micro-polish and seal integration pass on the existing RSR AXION app.
+
+Do not redesign the app.
+Do not rebuild architecture.
+Preserve all current working functionality.
+
+The seal image is attached in this chat. Import it into the app and use it as an official identity element.
+
+GOALS
+
+1. Add the attached RSR seal into the app.
+
+Use the seal image in three places:
+
+A. Boot screen
+- Place the seal above the RSR AXION title
+- Keep it centered and subtle
+- Use a soft fade/glow only
+- Do not make it oversized or flashy
+
+B. Dashboard header
+- Add a small version of the seal next to the RSR AXION wordmark
+- Keep the wordmark primary
+- The seal should support the identity, not overpower it
+
+C. Archive / document viewer watermark
+- Add a very faint watermark version of the seal behind the selected brief/document reading area
+- Keep opacity extremely low so readability is not affected
+- Make it feel official, not decorative
+
+2. Clean up the archive list cards
+- The archive/saved cards should feel visually consistent
+- Ensure:
+  - consistent card height
+  - consistent spacing
+  - consistent selected state
+  - clear hierarchy for title/date/mode/threat
+- Keep the archive list visually balanced against the detail viewer
+
+3. Preserve archive viewer improvements
+- Keep the improved document viewer layout
+- Do not revert back to the narrow sidebar behavior
+- Maintain readable line width for brief text
+
+4. Preserve pin behavior
+- Pinned signals must remain sorted at the top of the queue
+- Maintain their priority in AXION synthesis
+- Keep the visible pinned indicator
+
+5. Preserve all existing functionality
+
+Do NOT break:
+
+- boot screen
+- pull signals
+- run axion
+- quick brief
+- article
+- bulletin
+- archive filters
+- save / star / export / delete
+- exports
+- print
+- queue behavior
+- pin behavior
+
+6. Style rules
+Maintain the current tactical intelligence aesthetic:
+
+- near-black background
+- graphite panels
+- steel-gray borders
+- restrained purple accent
+- threat colors unchanged
+
+Avoid bright UI colors.
+
+7. Final intent
+This is the final polish pass to integrate the seal and ensure visual consistency in the archive list while preserving the current stable interface.
+
+Use the attached seal image directly and place it in the appropriate project asset path automatically if needed.

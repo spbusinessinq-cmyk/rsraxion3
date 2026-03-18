@@ -1,0 +1,108 @@
+Perform a single expansion pass on the AXION signal ingestion system.
+
+Goal:
+Increase the number of live signals pulled per run from ~175 to ~350–500 by expanding RSS/JSON feed sources while preserving the existing ingestion pipeline.
+
+STRICT RULES:
+Do not redesign the UI.
+Do not modify AXION scoring logic.
+Do not change the dashboard layout.
+Do not alter archive, brief, article, bulletin, export, or print behavior.
+Do not break existing working feeds.
+
+Only expand the feed source list used by /api/signals.
+
+CURRENT SYSTEM:
+The ingestion server pulls RSS feeds, normalizes items, deduplicates by URL/title hash, and returns signals to the frontend.
+
+TASKS:
+
+1. Expand the feed list to include these categories:
+
+GEOPOLITICS
+https://www.aljazeera.com/xml/rss/all.xml
+https://feeds.bbci.co.uk/news/world/rss.xml
+https://rss.politico.com/politics-news.xml
+https://www.bloomberg.com/politics/feeds/site.xml
+
+MILITARY / DEFENSE
+https://breakingdefense.com/feed/
+https://warontherocks.com/feed/
+https://www.thedrive.com/the-war-zone/feed
+https://www.navalnews.com/feed/
+
+ENERGY
+https://oilprice.com/rss/main
+https://www.spglobal.com/commodityinsights/en/rss-feed
+https://www.energyintel.com/rss
+
+ECONOMICS
+https://www.imf.org/en/News/rss
+https://www.oecd.org/newsroom/rss.xml
+https://www.marketwatch.com/rss/topstories
+
+INFRASTRUCTURE / SUPPLY CHAINS
+https://www.freightwaves.com/news/feed
+https://www.supplychainbrain.com/rss/topic
+
+CYBERSECURITY
+https://krebsonsecurity.com/feed/
+https://www.bleepingcomputer.com/feed/
+
+BUSINESS / MARKETS
+https://www.cnbc.com/id/100003114/device/rss/rss.html
+https://www.reutersagency.com/feed/?best-sectors=business-finance
+
+2. Harden feed fetching
+
+Each feed should:
+
+- timeout after 5 seconds
+- fail independently (one failure must not break the entire pull)
+- log OK / FAIL / ERR status
+
+3. Deduplicate signals
+
+Ensure duplicate articles across multiple feeds are removed using:
+
+- URL match
+- normalized title hash
+
+4. Normalize output
+
+Each signal returned should contain:
+
+title
+source
+link
+published
+category
+summary
+
+5. Maintain performance
+
+Target:
+
+300–500 signals per pull
+under 1 second runtime
+
+6. Do not remove existing feeds
+
+Append the new feeds to the existing working list.
+
+7. Return debug data
+
+The /api/signals response must include:
+
+{
+ successFeeds,
+ failFeeds,
+ rawCount,
+ elapsed
+}
+
+This must continue logging in the console.
+
+FINAL GOAL:
+
+AXION should pull 300–500 normalized signals across all feeds in one run, deduplicate them, and pass them into the existing scoring and brief generation system without any UI changes

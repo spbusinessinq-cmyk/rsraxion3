@@ -1,0 +1,111 @@
+Refine the existing RSR AXION app in place. Do not rebuild from scratch.
+
+The app is already functional:
+- all buttons work
+- pull signals works
+- archive works
+- exports work
+
+Your job is to improve the current app in one integrated refinement pass while preserving all existing functionality.
+
+GOALS
+
+1. Improve the overall dashboard aesthetic
+- Shift away from bright purple/cyan
+- Use a dark tactical intelligence style:
+  - background near-black
+  - panels graphite/slate
+  - borders subtle steel-gray
+  - accent minimal ice-blue / muted violet only where needed
+- Keep threat colors:
+  - LOW = green
+  - ELEVATED = amber
+  - HIGH = orange
+  - CRITICAL = red
+- Make the UI feel like a professional intelligence console, not a crypto dashboard
+
+2. Fix the right-side archive panel layout
+- Make the archive area cleaner and more readable
+- Separate archive list and selected brief detail into two clear panels
+- Stop filter buttons, mode chips, and sort chips from colliding or wrapping badly
+- Make rename/delete/export controls align cleanly with consistent spacing
+- Ensure the selected brief preview is readable and not squeezed
+- Improve archive card spacing, typography, and hierarchy
+
+3. Tighten the action/menu layout
+- Better spacing between action buttons
+- Better spacing inside threat filter, mode, and sort sections
+- Cleaner control sizing and alignment
+- Sharper card spacing overall
+
+4. Improve generated outputs
+
+Executive Intelligence Brief must be longer and more structured:
+- Title should clearly reflect run type:
+  - Daily Brief
+  - Weekly Brief
+  - Quick Brief
+- Structure:
+  - Threat Posture Summary
+  - Primary Signal Headlines
+  - Pattern Detection
+  - Strategic Implications
+  - Forward Watch Indicators
+
+Article output must be significantly stronger and longer:
+- Headline
+- Subhead
+- Opening Paragraph
+- Background Context
+- Current Developments
+- Strategic Analysis
+- System-Level Implications
+- Forward Outlook
+
+Bulletin output must be stronger and cleaner:
+- Threat Posture
+- Key Developments
+- Strategic Implication
+- Watch Indicators
+
+5. Add real-time header to all generated outputs
+Every generated output must begin with:
+
+FROM THE OFFICE OF EXECUTIVE INTELLIGENCE
+RSR AXION – INTELLIGENCE SYNTHESIS SYSTEM
+Location: [user local location if available, otherwise default to Los Angeles, California]
+Date: [full local date]
+Time: [24hr local time]
+INTELLIGENCE CYCLE: [DAILY / WEEKLY / QUICK based on actual run type]
+
+IMPORTANT:
+- Use the local time of the user/browser, not a fixed hardcoded time
+- If browser/user local location is not available, keep location as Los Angeles, California
+- The cycle line must reflect the actual generated output:
+  - Daily Brief => DAILY
+  - Weekly Brief => WEEKLY
+  - Quick Brief => QUICK
+
+6. Naming/output behavior
+- Full brief generated in daily mode should clearly read: Daily Brief
+- Full brief generated in weekly mode should clearly read: Weekly Brief
+- Quick brief should clearly read: Quick Brief
+- Archive titles should reflect those names cleanly
+- Generated outputs should feel like real intelligence desk products, not generic summaries
+
+7. Preserve all existing working functionality
+Do not break:
+- pull signals
+- run axion
+- quick brief
+- article
+- bulletin
+- archive behavior
+- export buttons
+- print flow
+- existing signal logic
+
+8. Deliver this as one integrated refinement pass to the current app
+- no redesign from scratch
+- no architecture rewrite
+- keep the current system and improve it in place

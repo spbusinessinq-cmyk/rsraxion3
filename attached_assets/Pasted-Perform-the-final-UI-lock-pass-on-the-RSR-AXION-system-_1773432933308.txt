@@ -1,0 +1,101 @@
+Perform the final UI lock pass on the RSR AXION system.
+
+Do not redesign the application architecture.
+Do not break existing functionality.
+
+This pass must fix three things only.
+
+1. Convert the archive selector area into a proper vertical archive list.
+
+The section currently displaying items such as:
+
+Daily Brief — HIGH
+3/13/2026 • daily
+
+must be converted from floating side-by-side cards into a clean single-column vertical list.
+
+Requirements:
+
+• The archive becomes a scrollable list container
+• One report per row
+• Rows stacked vertically
+• Unlimited reports can be scrolled
+
+Each row must contain:
+
+• report title
+• date
+• mode (daily / weekly / quick)
+• threat level indicator
+
+Example row layout:
+
+Daily Brief — HIGH 
+3/13/2026 • daily
+
+Selecting a row loads that report in the document viewer below.
+
+Scrolling must allow users to move through all archived reports smoothly.
+
+Remove the two-card floating layout and replace it with a vertical archive index.
+
+2. Preserve the document viewer.
+
+The section displaying the full report must remain unchanged.
+
+The viewer should still show:
+
+• title
+• metadata chips
+• report body
+• save / star / export / delete actions
+
+Selecting a report from the archive list should load it here exactly as it does now.
+
+3. Increase seal visibility.
+
+The seal is currently too small and difficult to see.
+
+Adjust sizes as follows:
+
+Boot screen:
+increase seal size to approximately 120px so it is clearly visible above the AXION title.
+
+Header:
+increase seal size to approximately 32–36px so it is visible beside the RSR AXION wordmark.
+
+Document watermark:
+keep subtle low opacity so readability is unaffected.
+
+4. Preserve current styling.
+
+Do not change the overall design system.
+
+Maintain:
+
+• dark tactical intelligence theme
+• purple AXION accent color
+• threat color indicators
+• typography
+• layout structure
+
+5. Preserve all existing functionality.
+
+Do not break:
+
+• Pull Signals
+• Run Axion
+• Quick Brief
+• Daily Brief
+• Article generation
+• Bulletin generation
+• Archive filters
+• Save / Star / Export / Delete
+• Export / Print
+• Signal queue
+• Boot screen
+• Theme styling
+
+6. Final intent.
+
+The archive must function as a scrollable intelligence report library.

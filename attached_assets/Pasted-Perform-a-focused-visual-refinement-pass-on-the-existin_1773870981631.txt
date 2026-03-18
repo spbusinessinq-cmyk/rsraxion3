@@ -1,0 +1,125 @@
+Perform a focused visual refinement pass on the existing RSR AXION application.
+
+Do NOT rebuild the app.
+Do NOT change architecture.
+Do NOT touch ingestion, filtering, scoring, archive logic, exports, print flow, or deployment.
+
+This pass is strictly a visual polish pass.
+
+==================================================
+1. CORE VISUAL CORRECTION
+==================================================
+
+The current AXION visual direction is close, but the panels carry too much purple in their interior surfaces.
+
+Correct the styling so the system feels:
+
+- black
+- sharp
+- premium
+- tactical
+- high contrast
+- controlled
+
+The goal is NOT purple-filled panels.
+The goal is BLACK PANELS with PURPLE EDGE GLOW.
+
+==================================================
+2. PANEL STYLING RULE
+==================================================
+
+Refine all major dashboard panels so:
+
+- interior panel fill is near-black / dark graphite
+- purple is removed from the panel body fill as much as possible
+- panel edges use a restrained purple glow / outline
+- the glow should sit around the panel perimeter, not wash the full surface
+- the overall feel should be black-first, purple-accented
+
+Use:
+- dark panel interiors
+- subtle steel / graphite borders
+- faint outer purple halo
+- cleaner edge definition
+- minimal internal tinting
+
+==================================================
+3. ACTIVE / SELECTED STATES
+==================================================
+
+Active states should remain purple-forward, but cleaner.
+
+Requirements:
+- active buttons can retain subtle purple illumination
+- selected tabs/chips can glow slightly
+- important panels may have slightly stronger purple edge glow
+- but the interior fill must stay dark and controlled
+
+Do NOT let large surfaces become purple-tinted.
+
+==================================================
+4. SECTION DEPTH / CONTAINER FEEL
+==================================================
+
+Major containers should feel more premium and separated.
+
+Refine:
+- outer card glow / perimeter treatment
+- border clarity
+- subtle layering
+- depth separation between background and panel
+
+The visual target is:
+- black body
+- dark panels
+- crisp outlines
+- restrained purple atmosphere
+
+==================================================
+5. REPORT PANEL POLISH
+==================================================
+
+Apply the same rule to the Executive Intelligence Brief panel:
+
+- keep report background dark
+- reduce purple flooding in the report body
+- preserve readability
+- use purple only on edge emphasis / section strength / active state if needed
+- maintain the sharp white typography
+
+==================================================
+6. HEADER / BRAND LOCKUP
+==================================================
+
+Keep the RSR AXION header strong.
+
+- preserve purple identity in the AXION wordmark
+- keep the header premium
+- do not reduce the branding strength
+- make sure the system still clearly reads as AXION
+
+==================================================
+7. PRESERVE EVERYTHING ELSE
+==================================================
+
+Do NOT change:
+- layout structure
+- mobile responsiveness
+- briefing logic
+- signal flow
+- archive behavior
+- current report structure
+- boot screen functionality
+
+==================================================
+8. FINAL INTENT
+==================================================
+
+The result should feel like:
+
+black tactical panels
+with restrained purple perimeter glow
+
+NOT purple-tinted panel fills.
+
+Make the system feel sharper, more premium, more expensive, and more internal.

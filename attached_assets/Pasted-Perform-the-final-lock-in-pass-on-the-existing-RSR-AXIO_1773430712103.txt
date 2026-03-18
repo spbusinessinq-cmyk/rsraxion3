@@ -1,0 +1,95 @@
+Perform the final lock-in pass on the existing RSR AXION app.
+
+Do not redesign the app.
+Do not rebuild architecture.
+Preserve all current working functionality.
+
+This is the final production-style refinement pass for an internal daily-use intelligence tool.
+
+GOALS
+
+1. Add a boot screen
+- Add a short cinematic boot/loading screen before the dashboard appears.
+- It should feel like an intelligence system startup, not a game intro.
+- Style:
+  - near-black background
+  - subtle scanline / grid / light sweep effect if lightweight
+  - minimal tactical text
+  - smooth fade into dashboard
+- Include:
+  - RSR AXION
+  - Intelligence Synthesis System
+  - a short loading status sequence such as:
+    - initializing signal layer
+    - linking intelligence modules
+    - verifying archive state
+    - preparing briefing console
+- Keep it fast and smooth, around 1.5 to 3 seconds max
+- Do not make it cheesy or over-animated
+
+2. Update the AXION brand treatment in the header
+- Keep “RSR” solid and clean
+- Make “AXION” outlined with a subtle glowing purple/violet edge treatment
+- Do not make it neon or overpowering
+- It should feel premium, sharp, and tactical
+- Preserve readability and the current dark intelligence aesthetic
+
+3. Final right-panel / archive polish
+- Keep the current archive improvements
+- Ensure the selected brief detail area reads like a document viewer, not a cramped sidebar
+- Improve vertical spacing and scroll behavior where needed
+- Keep archive controls aligned and readable
+
+4. Signal queue realism
+- Preserve the new signal state behavior
+- Make sure signal cards clearly show:
+  - status
+  - confidence
+  - source
+  - domain
+  - analyst note
+- Keep actions meaningful:
+  - Pin
+  - Dismiss
+  - Verified
+  - Exclude
+  - Used
+- Avoid visual clutter in the queue
+
+5. Accuracy / detection discipline
+- Make detections, threat posture, and pattern detection as accurate as the available pulled signals allow
+- Do not invent extra certainty
+- Base scoring, pattern detection, and escalation only on actual loaded signals
+- If signal confidence is weak or feed coverage is limited, reflect that in the output instead of overstating certainty
+- Keep the intelligence tone professional and disciplined
+
+6. Preserve output quality
+Keep all current structured outputs working:
+- Daily Brief
+- Weekly Brief
+- Quick Brief
+- Article
+- Bulletin
+
+Keep the real-time local header on all outputs.
+
+7. Preserve all working functionality
+Do not break:
+- pull signals
+- run axion
+- quick brief
+- article
+- bulletin
+- archive
+- exports
+- print
+- signal queue state behavior
+
+8. Final visual goal
+The finished app should feel like:
+- a personal internal intelligence console
+- dark, tactical, premium
+- restrained but distinctive
+- readable and operator-friendly
+- not crypto
+- not generic dashboard UI

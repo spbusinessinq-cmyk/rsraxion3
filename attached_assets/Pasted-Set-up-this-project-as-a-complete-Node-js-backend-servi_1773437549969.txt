@@ -1,0 +1,136 @@
+Set up this project as a complete Node.js backend service for the RSR AXION intelligence system.
+
+You must automatically create or modify any files necessary. Do NOT require manual edits.
+
+OBJECTIVE
+Run a persistent Node backend server that exposes:
+
+GET /api/signals
+GET /health
+
+This backend will serve signals to a remote frontend dashboard.
+
+------------------------------------
+
+STEP 1 — Environment
+Ensure the project runs Node.js (latest LTS).
+
+Install required dependencies automatically:
+
+express
+rss-parser
+cors
+node-fetch
+
+Run:
+
+npm init -y
+
+if package.json does not exist.
+
+------------------------------------
+
+STEP 2 — Create server.mjs
+
+If server.mjs does not exist, create it.
+
+The server must:
+
+• use Express
+• enable CORS
+• listen on process.env.PORT || 3000
+• bind to 0.0.0.0
+
+Create endpoints:
+
+/health
+returns:
+{ "status": "AXION ONLINE" }
+
+/api/signals
+
+This endpoint must:
+
+1. Fetch multiple global RSS feeds
+2. Parse them
+3. Convert entries into signals
+4. Return structured JSON
+
+Use feeds such as:
+
+Reuters World
+BBC World
+Al Jazeera
+Associated Press
+Financial Times
+Defense News
+The Hill
+Politico
+
+If a feed fails, skip it and continue.
+
+------------------------------------
+
+STEP 3 — Signal format
+
+Return JSON:
+
+{
+  "signals": [
+    {
+      "title": "",
+      "source": "",
+      "url": "",
+      "timestamp": ""
+    }
+  ],
+  "debug": {
+    "successFeeds": 0,
+    "rawCount": 0,
+    "timestamp": ""
+  }
+}
+
+------------------------------------
+
+STEP 4 — package.json
+
+Modify or create package.json to include:
+
+"type": "module"
+
+scripts:
+
+"start": "node server.mjs"
+
+------------------------------------
+
+STEP 5 — Replit run command
+
+Configure the Run button to execute:
+
+npm install && npm start
+
+------------------------------------
+
+STEP 6 — Stability
+
+Ensure the server:
+
+• never crashes from RSS failures
+• logs errors but continues
+• always returns valid JSON
+
+------------------------------------
+
+STEP 7 — Final output
+
+Once configured, confirm the backend is running and print the public Replit URL.
+
+The API must be accessible at:
+
+https://REPL_URL/api/signals
+
+and
+
+https://REPL_URL/health

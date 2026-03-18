@@ -1,0 +1,61 @@
+Perform a deployment/debug pass on the existing RSR AXION app.
+
+Do not redesign the UI.
+Do not change the dashboard layout.
+Do not alter archive, brief, article, bulletin, print, or styling behavior.
+
+The problem:
+The deployed app is still showing:
+“Fallback mode — live feeds unavailable.”
+
+This means the frontend is live, but the server/API ingestion route is not working correctly in production.
+
+Goals:
+
+1. Audit the production signal ingestion path
+- Identify exactly how Pull Signals works in deployment
+- Confirm whether the frontend is calling a local API/server route such as /api/signals
+- Confirm whether that API route is actually present in the deployed build
+
+2. Make the API ingestion route production-safe
+- Ensure the signal ingestion route is deployed with the app
+- Ensure it works in the production environment, not just local preview
+- Ensure the frontend calls the correct production path
+
+3. Add visible debug output for ingestion
+Without changing the UI design significantly, add temporary debugging visibility for signal ingestion status:
+- API route reached
+- feed fetch success count
+- feed fetch fail count
+- timeout count
+- fallback reason
+
+This can be logged to console and/or exposed in a small debug status string.
+
+4. Reduce false fallback behavior
+- Do not enter fallback mode unless the live API route truly fails
+- If partial feed success exists, use partial live results instead of immediate fallback
+
+5. Harden feed fetching
+- Keep per-feed timeout handling
+- Keep overall timeout handling
+- Keep deduplication
+- Keep normalization
+- Preserve the target of 50–80 signals in live production when feeds are reachable
+
+6. Preserve everything else
+Do not break:
+- Pull Signals
+- Run AXION
+- Quick Brief
+- Article
+- Bulletin
+- Archive
+- Exports
+- Print
+- Queue behavior
+- Seal / branding
+- Current tactical styling
+
+7. Final intent
+This pass is only about fixing production ingestion so the deployed app stops showing fallback mode and begins using real live signals reliably.

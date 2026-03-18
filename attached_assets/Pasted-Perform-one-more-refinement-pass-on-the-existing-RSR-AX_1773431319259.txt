@@ -1,0 +1,66 @@
+Perform one more refinement pass on the existing RSR AXION app.
+
+Do not redesign the app.
+Do not rebuild architecture.
+Preserve all current working functionality.
+
+This pass should focus on two things only:
+
+1. Fix the archive detail panel reading experience
+2. Clarify and improve pin behavior in the live queue
+
+GOALS
+
+1. Archive detail panel fix
+- The selected archive detail panel is still too narrow and awkward to read.
+- It should behave more like a document viewer and less like a cramped metadata sidebar.
+- Rebalance the archive section so:
+  - archive list stays on the left
+  - selected brief detail gets significantly more width on the right
+- Improve the selected detail reading area so long brief text is readable without becoming a thin stacked text column
+- Reduce awkward internal scrolling where possible
+- Improve spacing between:
+  - title
+  - control buttons
+  - metadata chips
+  - document preview
+  - analyst note area
+- Keep the archive actions working:
+  - Save
+  - Star
+  - Export
+  - Delete
+
+2. Archive detail layout polish
+- Make the selected brief controls feel cleaner and more intentional
+- Align buttons and chips better
+- Improve padding and line length in the selected brief preview
+- Keep the current dark tactical style intact
+
+3. Pin behavior improvement
+- Keep Pin functional and meaningful
+- Pin should:
+  - keep the signal locked near the top of the live queue
+  - protect it from normal reorder/dismiss flow
+  - increase its priority for future synthesis consideration
+- Add a visible pinned state so it is obvious when a signal is pinned
+- If lightweight to implement, use pinned signals as a slight weighting boost in Run AXION / future brief generation
+- Do not overcomplicate the queue UI
+
+4. Preserve everything else
+Do not break:
+- boot screen
+- pull signals
+- run axion
+- quick brief
+- article
+- bulletin
+- archive filters
+- archive actions
+- exports
+- print
+- current styling direction
+
+5. Final intent
+This pass is not a redesign.
+It is a final usability cleanup to make the archive reading experience comfortable and make Pin feel like a real operator tool.
