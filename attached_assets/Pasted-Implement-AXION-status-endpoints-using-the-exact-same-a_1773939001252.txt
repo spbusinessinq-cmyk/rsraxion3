@@ -1,0 +1,79 @@
+Implement AXION status endpoints using the exact same architecture pattern successfully used for RSR Intelligence Network. Do not guess, do not redesign frontend, and do not create random standalone servers.
+
+ARCHITECTURE
+Use the confirmed project structure:
+- Frontend: artifacts/axion (Vite static app)
+- Dev backend: artifacts/api-server (Express)
+- Production backend: cloud-functions/api (EdgeOne serverless functions)
+
+GOAL
+Create a real status endpoint for AXION that works:
+- in development
+- in production on EdgeOne
+- same-origin
+- JSON only
+- no fake complexity
+
+REQUIRED ROUTE
+Create:
+
+1. Production route:
+- cloud-functions/api/axion-status.js
+
+2. Development route:
+- artifacts/api-server/src/routes/axion-status.ts
+
+3. Register the dev route in:
+- artifacts/api-server/src/index.ts
+
+ROUTE PATH
+GET /api/axion-status
+
+RESPONSE FORMAT
+Return this exact shape:
+
+{
+  "status": "operational",
+  "service": "RSR AXION",
+  "timestamp": "<ISO string>",
+  "checks": {
+    "inference": "ok",
+    "pipeline": "ok",
+    "memory": "ok"
+  }
+}
+
+IMPLEMENTATION RULES
+- Do NOT modify frontend display code unless absolutely required for dev/prod route visibility
+- Do NOT change vite config unless necessary
+- Do NOT create a new backend outside the existing architecture
+- Do NOT touch unrelated files
+- Keep it minimal and clean
+- Ensure dev backend mirrors production route behavior
+
+PRODUCTION IMPLEMENTATION
+In cloud-functions/api/axion-status.js:
+- create the proper EdgeOne-compatible handler
+- return JSON response with correct content-type
+
+DEV IMPLEMENTATION
+In artifacts/api-server/src/routes/axion-status.ts:
+- create an Express router
+- return the same JSON structure
+
+ROUTE REGISTRATION
+In artifacts/api-server/src/index.ts:
+- import the new route
+- mount it at /api/axion-status
+
+VERIFICATION
+After implementation, report:
+1. exact files created/updated
+2. exact route path
+3. exact dev test URL
+4. exact production test URL
+5. confirmation that frontend was untouched or list any necessary frontend change
+6. concise changelog only
+
+IMPORTANT
+Do not go beyond this task. Just implement AXION status endpoint cleanly in the existing architecture.

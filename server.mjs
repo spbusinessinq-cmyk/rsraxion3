@@ -172,6 +172,21 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "AXION ONLINE", timestamp: new Date().toISOString(), static: SERVE_STATIC, port: PORT, feeds: FEED_SOURCES.length });
 });
 
+/* ── /api/axion-status ────────────────────────────────────── */
+app.get("/api/axion-status", (req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.json({
+    status: "operational",
+    service: "RSR AXION",
+    timestamp: new Date().toISOString(),
+    checks: {
+      inference: "ok",
+      pipeline: "ok",
+      memory: "ok",
+    },
+  });
+});
+
 /* ── /api/signals ─────────────────────────────────────────── */
 app.get("/api/signals", async (req, res) => {
   const PER_FEED = 15;
