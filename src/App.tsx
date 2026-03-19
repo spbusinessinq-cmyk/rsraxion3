@@ -4,6 +4,8 @@ import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Gl
 import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, ExportKind, FeedEvent, HistoryEntry, Mode, ThreatMatrix } from "./lib/types";
 import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, safeLoad, saveToStorage, scoreBand } from "./lib/utils";
 
+// cache-bust-v2
+
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
 const STORAGE_KEYS = {

@@ -3,6 +3,7 @@
   color: #d8dbe4;
   background: #050608;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  --build: "v2";
 }
 * { box-sizing: border-box; }
 html, body, #root { min-height: 100%; }
