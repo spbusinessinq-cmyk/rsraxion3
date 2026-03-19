@@ -889,6 +889,35 @@ body { margin: 0; background: #050608; }
 .archiveText::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.28); }
 
 /* ═══════════════════════════════════════════════════════════
+   BLACKDOG STATUS BADGE
+═══════════════════════════════════════════════════════════ */
+.bdBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 0 4px;
+  border-left: 1px solid rgba(255,255,255,.08);
+  margin-left: 4px;
+}
+.bdProtected {
+  font-size: .6rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(216,219,228,.4);
+  white-space: nowrap;
+}
+.bdState {
+  font-size: .65rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  white-space: nowrap;
+}
+.bdGreen { color: #4ade80; }
+.bdAmber { color: #fbbf24; }
+.bdRed   { color: #f87171; }
+
+/* ═══════════════════════════════════════════════════════════
    RESPONSIVE
 ═══════════════════════════════════════════════════════════ */
 @media (max-width: 1200px) {
