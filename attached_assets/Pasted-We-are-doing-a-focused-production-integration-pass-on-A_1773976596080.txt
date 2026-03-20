@@ -1,0 +1,58 @@
+We are doing a focused production integration pass on AXION only.
+
+MISSION:
+Fix the BLACKDOG protection badge/state on AXION so it correctly shows that AXION is protected / connected when live Blackdog reports AXION as ONLINE.
+
+IMPORTANT CONTEXT:
+Blackdog is already live and already reporting AXION as ONLINE in its linked systems panel.
+So do NOT spend time changing Blackdog logic unless you prove AXION is calling the wrong live endpoint.
+This is now an AXION-side consumer/render problem until proven otherwise.
+
+YOUR JOB:
+Trace the AXION badge/state end to end.
+
+Find:
+1. the exact AXION component that renders the Blackdog-connected / threat guarded / secured status
+2. the exact fetch/query URL it calls
+3. whether it is using:
+   - a stale URL
+   - a dev/local URL
+   - a relative /api path against AXION instead of Blackdog
+   - the wrong response shape
+4. the exact condition that decides whether AXION shows connected/guarded vs unreachable/offline
+
+VERIFY AGAINST LIVE ONLY:
+Use the actual live Blackdog production endpoint AXION should consume.
+Do not validate against mock/dev/local behavior.
+
+SUCCESS CONDITION:
+If live Blackdog returns a healthy response such as:
+{ "status": "ONLINE", "mode": "API", "latency": number }
+then AXION must render its protected/guarded/secured Blackdog state as ACTIVE.
+
+REQUIREMENTS:
+- do not redesign UI
+- do not touch unrelated AXION systems
+- do not touch Intel
+- do not guess
+- inspect the actual badge component and actual runtime logic
+- verify response shape vs success condition
+- remove debug noise before finishing
+
+IF THE URL IS WRONG:
+Fix it.
+
+IF THE RESPONSE PARSING IS WRONG:
+Fix it.
+
+IF THE SUCCESS CONDITION IS TOO STRICT:
+Fix it so ONLINE from Blackdog counts as connected/secured.
+
+OUTPUT REQUIRED:
+1. ROOT CAUSE
+2. EXACT FILES CHANGED
+3. EXACT CHANGES MADE
+4. EXACT LIVE BLACKDOG URL AXION now uses
+5. EXACT RESPONSE SHAPE received
+6. EXACT CONDITION that now triggers secured/connected state
+7. EXACT GIT COMMANDS

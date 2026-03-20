@@ -6,9 +6,10 @@ const ENDPOINT = "https://rsr-blackdog.edgeone.app/api/network-status";
 const INTERVAL_MS = 5000;
 
 function mapStatus(raw: string): BDStatus {
-  if (raw === "ok") return "ok";
-  if (raw === "degraded") return "degraded";
-  if (raw === "down") return "down";
+  const r = raw.toLowerCase();
+  if (r === "ok" || r === "online") return "ok";
+  if (r === "degraded") return "degraded";
+  if (r === "down" || r === "offline") return "down";
   return "unreachable";
 }
 
