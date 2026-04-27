@@ -1,16 +1,22 @@
 export type Mode = "daily" | "weekly" | "full";
-export type BriefDepth = "full" | "quick" | "daily" | "weekly";
+export type BriefDepth = "full" | "quick";
 export type ExportKind = "txt" | "article" | "bulletin";
 export type ArchiveThreatFilter = "ALL" | "LOW" | "GUARDED" | "ELEVATED" | "HIGH" | "CRITICAL";
 export type ArchiveModeFilter = "ALL" | "quick" | "daily" | "weekly" | "full";
 export type ArchiveSort = "newest" | "oldest" | "threat";
+
 export type DomainFilter =
   | "ALL"
   | "Global Affairs"
   | "Security / Defense"
-  | "Technology Systems"
-  | "Markets"
-  | "Domestic / Policy";
+  | "Technology"
+  | "Cyber / Signals"
+  | "Markets / Economy"
+  | "Energy"
+  | "Policy / Regulation"
+  | "Infrastructure";
+
+export type PressureState = "BUILDING" | "TRANSFERRING" | "RELEASING" | "STABLE" | "FRAGMENTED";
 
 export type FeedEvent = {
   id: string;
@@ -36,7 +42,7 @@ export type HistoryEntry = {
   issue: string;
   date: string;
   title: string;
-  mode: BriefDepth;
+  mode: string;
   threat: string;
   brief: string;
   starred: boolean;

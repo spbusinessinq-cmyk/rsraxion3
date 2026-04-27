@@ -1,7 +1,7 @@
 # RSR AXION v3.0
 
 ## Overview
-RSR AXION is an Intelligence Synthesis System — a React + TypeScript + Vite single-page application that ingests live RSS news feeds entirely in the browser, scores signals by severity and confidence, and generates executive intelligence briefs with threat matrix assessments. Runs as a fully static frontend with no backend dependency.
+RSR AXION is an Intelligence Synthesis System — a React + TypeScript + Vite single-page application that ingests live RSS news feeds entirely in the browser, applies multi-factor scoring to signals, and generates executive intelligence briefs with threat matrix assessments. Runs as a fully static frontend with no backend dependency.
 
 ## Architecture
 - **Frontend**: React 18 + TypeScript, bundled with Vite 5
@@ -12,75 +12,71 @@ RSR AXION is an Intelligence Synthesis System — a React + TypeScript + Vite si
 - **Deployment**: Static — `npm run build` → `dist/assets-v3/` served by EdgeOne CDN
 - **Persistence**: localStorage only, keys at `-v6` suffix
 
+## v3.0 Intelligence Engine (June 2025)
+
+### Multi-Factor Scoring (scoreSignal)
+Four-component scoring model — no random values:
+- **A. Relevance Score** (0–100): domainWeight + institutionalImpact + systemImpact + crossDomainPotential + recencyWeight
+- **B. Confidence Score** (0–100): sourceReliability + titleClarity + recencyIntegrity
+- **C. Threat Score** (0–100): threatBase + systemicImpact + geographicSpread + escalationVelocity + crossDomainPotential
+- **D. Priority Score**: used for sort order (confidence × 0.6 + severity × 10 + recency)
+
+### Signal Intake
+- **~62 RSS feeds** across 9 domain categories, batched in groups of 20
+- **PER_FEED = 25** items per feed (pipeline target toward 2,000 signals)
+- Post-dedup cap: 450 signals sorted by priority score
+- Hard relevance filter (`isStrategicallyRelevant`) excludes entertainment, sports, lifestyle, gossip
+- Positive strategic keywords required for signal to pass
+- Failed feeds silently skipped; 8.5s AbortController timeout per feed
+
+### Domain Classification (16 internal domains)
+Security / Defense | Cyber / Signals | AI / Compute | Energy | Supply Chains | Infrastructure | Markets / Economy | Policy / Regulation | Legal / Courts | Social Stability | Public Health / Biosecurity | Space / Orbital Systems | Information Warfare | Global Affairs | Governance / Institutions | (feed default fallback)
+
+### Threat Posture Bands
+`scoreBand(clusterCount)`: 0–1=LOW | 2–3=GUARDED | 4–5=ELEVATED | 6–7=HIGH | 8+=CRITICAL
+`numericThreatBand(score)`: 0–30=LOW | 31–49=GUARDED | 50–69=ELEVATED | 70–84=HIGH | 85–100=CRITICAL
+
+### Pressure Model
+- `assessPressureState(event)`: BUILDING | TRANSFERRING | RELEASING | STABLE | FRAGMENTED
+- `inferPressureVector(event)`: infers source→target domain transmission (e.g., Energy→Markets)
+
+## 14-Section Full Intelligence Brief Structure
+§1 Executive Overview | §2 Threat Posture Summary | §3 Data Summary | §4 Domain Pressure Chart (text bar) | §5 Primary Signals (9-field: EVENT/CONTEXT/MECHANISM/WHY IT MATTERS/SYSTEM IMPACT/PRESSURE STATE/VECTOR/FORWARD OUTLOOK/WATCHPOINT) | §6 Signal Matrix by confidence tier | §7 System Mechanics | §8 System Intersection | §9 Pressure Map | §10 Constraints | §11 Forward Projection (4 paths) | §12 Operator Takeaway | §13 Watchpoints | §14 Appendix
+
+### Brief Signal Limits
+- Quick: 6 signals (1 page equiv)
+- Daily: 15 signals (2–3 pages)
+- Weekly: 25 signals (4–6 pages)
+- Full: 40 signals (5–7 pages, states insufficient density if < 8 signals)
+
 ## v3.0 Visual System
-- **Palette**: Steel/black — `#050608` base, no purple, steel-cyan `rgba(56,189,248,*)` as primary accent
-- **Fonts**: Orbitron 400/700/900 for brand/display/metric values; IBM Plex Mono 400/500/600 for all data/mono/UI text
-- **Metric classes**: `.steel` (sky-300 #7dd3fc), `.white`, `.amber`, `.green`
-- **Buttons**: `.accent` uses steel-cyan border/glow; `.modeBtn` for Daily/Weekly/Full mode toggle
-- **Elevated threat level**: steel-cyan (replaced purple)
-- **Print/document mode**: `@media print` section hides UI chrome, renders brief as clean document
+- **Palette**: Operator-grade steel/black — `#050608` base, zero purple/violet/indigo anywhere
+- **Accent**: Steel-cyan `rgba(56,189,248,*)` only as rare data highlight
+- **Fonts**: Orbitron 400/700/900 for brand/display; IBM Plex Mono 400/500/600 for all data/UI text
+- **Global scrollbars**: 6px width, `#050608` track, `#2a2f36` thumb, `#3a424d` hover — standardized everywhere
+- **Queue cards**: Compact operator-grade rows — 2-line summary clamp, small controls, minimal padding
+- **Domain chips in UI**: ALL / Global Affairs / Security / Defense / Cyber / Signals / Technology / Markets / Economy / Energy / Policy / Regulation / Infrastructure
 
-## Signal Ingestion — collectSignals()
-- 32 public RSS feeds across: Global Affairs, Security/Defense, Technology/Cyber, Markets/Energy, Domestic/Policy
-- Fetched in parallel via `Promise.allSettled()` using `https://api.rss2json.com/v1/api.json?rss_url=ENCODED_URL`
-- Per-feed 8s AbortController timeout; failed feeds are silently skipped
-- Domain classifier (`classifyDomain`) infers domain from title keywords: Security / Defense, Technology Systems, Markets, Domestic / Policy, Global Affairs
-- Deduplication by normalized title prefix — caps at 300 signals
+## Print/PDF Output
+- `buildPrintHtml(text)` generates a full HTML document with Orbitron headings, metadata table, section blocks
+- Auto-print script on load; professional @media print CSS with page-break handling
+- Clean white document — not the dark console view
 
-## Brief Modes
-- **Daily** — standard synthesis brief
-- **Weekly** — extended weekly cycle brief
-- **Full** — comprehensive 13-section operator brief (depth="full" via `buildFullBrief`)
-- **Quick** — 5-signal rapid assessment
+## Exports
+- **TXT**: Full brief text with header + all sections
+- **Article**: 7-section publishable analysis (Opening / Background / Current Developments / Mechanism / System Implications / Outlook / Closing)
+- **Bulletin**: Compact 5-section situational bulletin (Posture / Key Developments / Strategic Implication / Watch Indicators)
+- **Print**: Opens professional print HTML in new window
 
-## Project Layout
-```
-/
-├── index.html          # HTML entry point
-├── server.mjs          # Express server (dev API + static fallback)
-├── vite.config.ts      # Vite config (port 5000, assets at assets-v3/)
-├── tsconfig.json
-├── package.json
-├── public/
-│   └── rsr-seal.png    # RSR seal image
-├── dist/               # Built static site (deploy this)
-├── functions/api/      # CloudFlare/EdgeOne function: axion-status.js
-├── src/
-│   ├── main.tsx        # React root
-│   ├── App.tsx         # Main app — collectSignals(), brief generation, archive, domain filter
-│   ├── index.css       # All styles (v3: Orbitron + IBM Plex Mono, steel palette)
-│   └── lib/
-│       ├── types.ts    # TypeScript types: Mode, BriefDepth, DomainFilter, HistoryEntry, etc.
-│       └── utils.ts    # Utility functions: pressure model, 13-section full brief, scoring, export
-│   └── components/
-│       └── BlackdogStatus.tsx  # BLACKDOG system status badge
-```
+## Signal Lifecycle States
+- verified / used in brief / dismissed / excluded / pinned — all persisted to localStorage
+- Analyst notes per signal persisted to localStorage
 
-## Key Features
-- **Browser-native** RSS signal ingestion via rss2json — 32 feeds, 300 signals max
-- Threat matrix scoring (GUARDED / ELEVATED / HIGH / CRITICAL) across 4 domains
-- Pressure model integrated into `buildFullBrief` for threat calibration
-- Signal queue: pin, dismiss, verify, exclude, analyst notes per signal
-- Domain filter chips: ALL / Global Affairs / Security / Defense / Technology Systems / Markets / Domestic / Policy
-- Brief generation: Quick Brief, Daily Brief, Weekly Brief, Full Brief (13-section)
-- Signal archive with search, filter (threat/mode/sort), star, rename, analyst notes
-- Archive mode filter includes: daily / weekly / full / quick
-- Export: TXT download, Article draft, Bulletin, Print (document mode)
-- RSR seal: boot screen, header, archive watermark
-- Boot screen: cinematic sequenced startup with fade
-- localStorage persistence with -v6 storage keys
-- Fallback signals activate if all feeds fail
-
-## Development
-```bash
-npm install
-npm run dev   # Vite on :5000
-npm run build # Output: dist/assets-v3/
-```
-
-## Deployment
-Configured as a **static** site:
-- Build: `npm run build`
-- Public dir: `dist`
-- Deploy to EdgeOne CDN — no Node server required
-- `public/_routes.json` configures CloudFlare Pages routing for `/api/*`
+## Key Files
+- `src/App.tsx` — shell, feed ingestion, state machine, UI
+- `src/lib/utils.ts` — intelligence engine: scoring, brief builders, pressure model
+- `src/lib/types.ts` — TypeScript interfaces
+- `src/index.css` — complete styling, scrollbars, print CSS
+- `src/components/BlackdogStatus.tsx` — status badge
+- `vite.config.ts` — build config (outDir: dist/assets-v3)
+- `public/_routes.json` — EdgeOne CDN routing

@@ -16,6 +16,31 @@
 html, body, #root { min-height: 100%; }
 body { margin: 0; background: #050608; }
 
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL SCROLLBAR — 6px dark, standardized across all panels
+═══════════════════════════════════════════════════════════ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2f36 #050608;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #050608;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2f36;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a424d;
+}
+::-webkit-scrollbar-corner {
+  background: #050608;
+}
+
 /* ── App Shell ─────────────────────────────────────────────── */
 .app { min-height: 100vh; color: #c8ccd6; }
 
@@ -598,69 +623,71 @@ body { margin: 0; background: #050608; }
   max-height: 500px;
   overflow: auto;
   padding-right: 2px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,.14) transparent;
 }
-.scroll::-webkit-scrollbar { width: 4px; }
-.scroll::-webkit-scrollbar-track { background: rgba(255,255,255,.02); border-radius: 4px; }
-.scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
-.scroll::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.24); }
 
-/* ── Event Cards ───────────────────────────────────────────── */
+/* ── Event Cards — Compact Operator Grade ──────────────────── */
 .event {
-  margin-bottom: 8px;
-  border-radius: 8px;
-  border: 1px solid rgba(255,255,255,.065);
-  background: rgba(255,255,255,.018);
-  padding: 11px 13px;
+  margin-bottom: 5px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.055);
+  background: rgba(255,255,255,.014);
+  padding: 8px 11px;
   transition: border-color .14s, background .14s;
 }
-.event:hover { border-color: rgba(255,255,255,.1); background: rgba(255,255,255,.03); }
-.event.excluded { opacity: .32; }
+.event:hover { border-color: rgba(255,255,255,.09); background: rgba(255,255,255,.025); }
+.event.excluded { opacity: .28; }
 .event.pinned {
-  border-color: rgba(56,189,248,.25);
-  background: rgba(255,255,255,.018);
-  box-shadow: inset 3px 0 0 rgba(56,189,248,.5), 0 0 0 1px rgba(56,189,248,.04);
+  border-color: rgba(56,189,248,.22);
+  background: rgba(255,255,255,.014);
+  box-shadow: inset 3px 0 0 rgba(56,189,248,.45), 0 0 0 1px rgba(56,189,248,.03);
 }
 
 .eventHead {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
 }
-.eventTitle { font-weight: 600; font-size: .79rem; line-height: 1.45; color: #b0b6c4; flex: 1; }
+.eventTitle {
+  font-weight: 600;
+  font-size: .76rem;
+  line-height: 1.38;
+  color: #9da4b4;
+  flex: 1;
+}
 .domain {
-  border-radius: 4px;
-  padding: 2px 6px;
-  background: rgba(255,255,255,.03);
-  border: 1px solid rgba(255,255,255,.07);
-  color: #404860;
+  border-radius: 3px;
+  padding: 1px 5px;
+  background: rgba(255,255,255,.025);
+  border: 1px solid rgba(255,255,255,.06);
+  color: #353d57;
   white-space: nowrap;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: .63rem;
-  font-weight: 500;
+  font-size: .58rem;
+  font-weight: 600;
+  letter-spacing: .04em;
   flex-shrink: 0;
+  text-transform: uppercase;
 }
 
 /* ── Event Meta ────────────────────────────────────────────── */
 .eventMeta {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin-top: 7px;
+  gap: 6px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 .metaSource {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: .66rem;
-  color: #30384e;
+  font-size: .62rem;
+  color: #292f42;
   font-weight: 500;
 }
-.metaSep { color: #1e2530; font-size: .7rem; }
+.metaSep { color: #1a2030; font-size: .68rem; }
 .metaConf {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: .65rem;
+  font-size: .62rem;
   font-weight: 700;
   letter-spacing: .04em;
 }
@@ -672,18 +699,27 @@ body { margin: 0; background: #050608; }
 .metaSev {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
 }
 .sevDot {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: rgba(255,255,255,.08);
+  background: rgba(255,255,255,.06);
   display: inline-block;
 }
-.sevActive { background: rgba(245,158,11,.6); }
+.sevActive { background: rgba(245,158,11,.55); }
 
-.summary { color: #303a50; font-size: .74rem; margin-top: 6px; line-height: 1.55; }
+.summary {
+  color: #272f42;
+  font-size: .70rem;
+  margin-top: 4px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 /* ── Event State Tags ──────────────────────────────────────── */
 .eventTags {
@@ -708,51 +744,51 @@ body { margin: 0; background: #050608; }
 .eTagUsed     { background: rgba(245,158,11,.07);  border: 1px solid rgba(245,158,11,.18); color: #fcd34d; }
 .eTagExcluded { background: rgba(239,68,68,.06);   border: 1px solid rgba(239,68,68,.16);  color: #fca5a5; }
 
-/* ── Event Actions ─────────────────────────────────────────── */
+/* ── Event Actions — Compact ───────────────────────────────── */
 .actions {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 .smallBtn {
-  border: 1px solid rgba(255,255,255,.065);
-  background: rgba(255,255,255,.025);
-  color: #404860;
-  border-radius: 5px;
-  padding: 5px 9px;
+  border: 1px solid rgba(255,255,255,.055);
+  background: rgba(255,255,255,.018);
+  color: #353d57;
+  border-radius: 4px;
+  padding: 3px 7px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: .68rem;
+  font-size: .62rem;
   font-weight: 500;
-  transition: background .13s, border-color .13s, color .13s;
+  transition: background .12s, border-color .12s, color .12s;
 }
-.smallBtn:hover { background: rgba(255,255,255,.06); color: #7a8499; }
-.smallBtn.active   { border-color: rgba(56,189,248,.28); background: rgba(56,189,248,.06); color: #7dd3fc; box-shadow: 0 0 0 1px rgba(56,189,248,.06); }
-.smallBtn.warn     { border-color: rgba(239,68,68,.2);   background: rgba(239,68,68,.06);  color: #fca5a5; }
-.smallBtn.verified { border-color: rgba(34,197,94,.2);   background: rgba(34,197,94,.06);  color: #86efac; }
+.smallBtn:hover { background: rgba(255,255,255,.05); color: #6a7490; }
+.smallBtn.active   { border-color: rgba(56,189,248,.26); background: rgba(56,189,248,.05); color: #7dd3fc; }
+.smallBtn.warn     { border-color: rgba(239,68,68,.18);  background: rgba(239,68,68,.05);  color: #fca5a5; }
+.smallBtn.verified { border-color: rgba(34,197,94,.18);  background: rgba(34,197,94,.05);  color: #86efac; }
 
 /* ── Analyst Note ──────────────────────────────────────────── */
 .note {
   width: 100%;
-  min-height: 66px;
-  border-radius: 6px;
-  margin-top: 9px;
-  border: 1px solid rgba(255,255,255,.058);
-  background: rgba(0,0,0,.26);
+  min-height: 40px;
+  border-radius: 5px;
+  margin-top: 6px;
+  border: 1px solid rgba(255,255,255,.045);
+  background: rgba(0,0,0,.2);
   color: #6e7890;
-  padding: 8px 10px;
+  padding: 5px 8px;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: .72rem;
-  line-height: 1.55;
+  font-size: .66rem;
+  line-height: 1.5;
   resize: vertical;
   outline: none;
 }
-.note:focus { border-color: rgba(56,189,248,.3); }
-.note::placeholder { color: #1e2530; }
+.note:focus { border-color: rgba(56,189,248,.26); }
+.note::placeholder { color: #181f2c; }
 
 /* ═══════════════════════════════════════════════════════════
    ARCHIVE
@@ -816,10 +852,7 @@ body { margin: 0; background: #050608; }
   scrollbar-color: rgba(255,255,255,.14) rgba(255,255,255,.02);
   padding-right: 2px;
 }
-.archiveList::-webkit-scrollbar { width: 4px; }
-.archiveList::-webkit-scrollbar-track { background: rgba(255,255,255,.02); border-radius: 4px; }
-.archiveList::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
-.archiveList::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.24); }
+/* scrollbar handled globally */
 
 .archiveItem {
   border: 1px solid rgba(255,255,255,.058);
@@ -964,10 +997,7 @@ body { margin: 0; background: #050608; }
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,.14) rgba(255,255,255,.02);
 }
-.archiveText::-webkit-scrollbar { width: 5px; }
-.archiveText::-webkit-scrollbar-track { background: rgba(255,255,255,.02); border-radius: 4px; }
-.archiveText::-webkit-scrollbar-thumb { background: rgba(255,255,255,.14); border-radius: 4px; }
-.archiveText::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.24); }
+/* archiveText scrollbar handled globally */
 
 /* ═══════════════════════════════════════════════════════════
    BLACKDOG STATUS BADGE

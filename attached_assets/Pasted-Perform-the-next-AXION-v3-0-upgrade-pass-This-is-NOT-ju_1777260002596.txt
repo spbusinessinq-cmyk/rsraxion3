@@ -1,0 +1,613 @@
+Perform the next AXION v3.0 upgrade pass.
+
+This is NOT just a visual pass.
+This is a full intelligence-engine refinement pass focused on:
+
+1. real scoring logic
+2. stronger filtering
+3. 2,000-signal intake capability
+4. 5–7 page executive briefs
+5. print/PDF document quality
+6. removal of all purple UI contamination
+7. matching scrollbars everywhere
+8. data-driven charts / tables / boxes
+
+Do NOT break:
+- Pull Signals
+- Run AXION
+- Quick / Daily / Weekly / Full
+- Archive
+- Print
+- TXT export
+- Article export
+- Bulletin export
+- static EdgeOne deployment
+- local persistence
+- verified / used / dismissed / excluded states
+
+Keep the app static/client-side compatible unless server logic already exists.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+1. REMOVE PURPLE COMPLETELY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Remove all purple from the UI except possibly a tiny AXION logo accent if unavoidable.
+
+Eliminate:
+- purple panel tint
+- purple button glow
+- purple gradients
+- purple backgrounds
+- purple shadows
+- violet overlays
+- global hue wash
+
+Search CSS and components for:
+- purple
+- violet
+- indigo
+- #6d50d2
+- rgba purple values
+- gradient purple values
+- shadow purple values
+
+Replace with:
+- matte black
+- near-black
+- charcoal
+- gunmetal
+- steel gray
+- emerald for verified/active
+- amber for elevated/caution
+- red for critical
+- cyan only as rare data highlight
+
+The final UI must feel operator-level, black/steel, institutional, and professional.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+2. GLOBAL SCROLLBAR FIX
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Make every scrollbar consistent.
+
+Apply globally to:
+- report output
+- live signal queue
+- intelligence archive
+- archive preview
+- any scrollable panel
+
+Scrollbar rules:
+- 6px max width
+- dark track
+- muted gray thumb
+- no white scrollbars
+- no bright colored scrollbars
+- no thick browser-looking scrollbars
+- subtle hover state only
+
+Use CSS similar to:
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #050608;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2f36;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3a424d;
+}
+
+Also add Firefox scrollbar-color support.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+3. SIGNAL INTAKE SCALE — 2,000+
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade signal intake so AXION can attempt up to 2,000 raw signal items without freezing the UI.
+
+Requirements:
+- Pull from all existing feeds
+- Increase raw intake target toward 2,000 where possible
+- Use batching/chunking if needed
+- Keep UI responsive
+- Deduplicate aggressively
+- Sort by relevance/weight after filtering
+- Display only the top usable set in the live queue
+- Preserve archive and local persistence behavior
+
+Pipeline target:
+- raw attempted: up to 2,000
+- after parsing: variable
+- after hard filtering: cleaner pool
+- final display/use pool: top 300 or current UI cap unless safely expandable
+- reports use best 20–40 signals depending on mode
+
+Do not dump all 2,000 into the visible UI.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+4. HARD RELEVANCE FILTER
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Strengthen the filter so irrelevant junk never enters the intelligence pipeline.
+
+Auto-exclude unless directly tied to policy, security, infrastructure, technology, markets, energy, governance, cyber, AI, or strategic systems:
+
+- celebrity
+- entertainment
+- music
+- film
+- sports
+- lifestyle
+- food
+- travel
+- astrology
+- gossip
+- random human-interest stories
+- soft science/health stories with no policy, security, infrastructure, or systemic consequence
+
+Important:
+Do not accidentally remove real strategic stories involving:
+- public health emergency
+- major legal/court decision
+- government policy
+- mass unrest
+- institutional crisis
+- technology breakthrough
+- supply chain shock
+- critical infrastructure
+- defense industry
+- cyber incident
+- energy market impact
+
+Add a function like:
+
+isStrategicallyRelevant(signal)
+
+It should evaluate:
+- title
+- summary
+- source
+- domain
+- keywords
+- systemic impact terms
+
+Reject if relevance is below threshold.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+5. REAL SCORING MODEL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Replace vague scoring with a clear multi-factor model.
+
+Do NOT call it quantum.
+Do NOT use fake quantum language.
+Use probabilistic / multi-factor / weighted scoring language.
+
+Create or refine scoring functions:
+
+A. Relevance Score 0–100
+
+relevanceScore =
+  domainWeight * 0.25 +
+  institutionalImpact * 0.20 +
+  systemImpact * 0.20 +
+  crossDomainPotential * 0.20 +
+  recencyWeight * 0.15
+
+B. Confidence Score 0–100
+
+confidenceScore =
+  sourceReliability * 0.35 +
+  corroborationStrength * 0.25 +
+  domainConsistency * 0.15 +
+  signalClarity * 0.15 +
+  recencyIntegrity * 0.10
+
+C. Threat Score 0–100
+
+threatScore =
+  severity * 0.30 +
+  systemicImpact * 0.25 +
+  geographicSpread * 0.15 +
+  domainCoupling * 0.20 +
+  escalationVelocity * 0.10
+
+Map threat score:
+0–30 LOW
+31–49 GUARDED
+50–69 ELEVATED
+70–84 HIGH
+85–100 CRITICAL
+
+D. Priority Score 0–100
+
+priorityScore =
+  relevanceScore * 0.30 +
+  confidenceScore * 0.20 +
+  threatScore * 0.30 +
+  recencyWeight * 0.10 +
+  sourceReliability * 0.10
+
+Use priorityScore to select primary signals.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+6. DOMAIN CATEGORIES
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Expand domains and classify better.
+
+Domains:
+- Global Affairs
+- Security / Defense
+- Infrastructure
+- Markets / Economy
+- Technology
+- Energy
+- AI / Compute
+- Supply Chains
+- Information Warfare
+- Cyber / Signals
+- Policy / Regulation
+- Governance / Institutions
+- Social Stability
+- Legal / Courts
+- Public Health / Biosecurity
+- Space / Orbital Systems
+
+Use title + summary + source for classification.
+
+Avoid classifying everything as Global Affairs.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7. PRESSURE MODEL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add pressure-state logic.
+
+Each major signal should get:
+
+pressureState:
+- BUILDING
+- TRANSFERRING
+- RELEASING
+- STABLE
+- FRAGMENTED
+
+Also infer pressure vectors:
+
+sourceDomain → targetDomain
+
+Examples:
+Energy → Markets
+Conflict → Infrastructure
+Technology → Policy
+AI / Compute → Energy
+Cyber → Governance
+Supply Chains → Security
+
+Use this in the brief and charts.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+8. REPORT MODES AND LENGTH
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade report depth.
+
+Quick Brief:
+- 3–6 signals
+- 1 page equivalent
+
+Daily Brief:
+- 8–15 signals
+- 2–3 page equivalent
+
+Weekly Brief:
+- 15–25 signals
+- 4–6 page equivalent
+
+Full Brief:
+- 20–40 signals where available
+- 5–7 page equivalent
+
+Add/keep FULL mode in UI.
+
+If insufficient quality signals exist, do not pad with junk.
+Instead state:
+“Signal density was insufficient for full-length expansion without degrading analytic quality.”
+
+But if 20+ high-quality signals exist, generate a true long-form brief.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+9. FULL INTELLIGENCE BRIEF STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Daily, Weekly, and Full should use this structure:
+
+FROM THE OFFICE OF EXECUTIVE INTELLIGENCE
+RSR AXION — INTELLIGENCE SYNTHESIS SYSTEM v3.0
+Location: [browser local if available, otherwise Los Angeles, California]
+Date: [full date]
+Time: [24hr local time]
+INTELLIGENCE CYCLE: [QUICK / DAILY / WEEKLY / FULL]
+SIGNALS PROCESSED: [count]
+CYCLE CONFIDENCE: [score]/100
+
+1. EXECUTIVE OVERVIEW
+4–8 substantive sentences.
+Explain what changed, what matters, and where pressure is forming.
+
+2. THREAT POSTURE SUMMARY
+Include:
+- Overall Threat Posture
+- Conflict Index
+- Economic Stress Index
+- Infrastructure Exposure Index
+- Information / Policy Pressure Index
+- Technology / AI Index
+- Energy Index
+- Confidence Score
+
+3. DATA SUMMARY
+Add compact data blocks:
+- Signals processed
+- Signals used
+- Confirmed / Likely / Contested / Unknown counts
+- Domain distribution
+- Average confidence
+- Average threat score
+- Top pressure domains
+
+4. DOMAIN PRESSURE CHART
+Render text-based chart in report output and print view:
+
+Security / Defense      ██████████  HIGH
+Infrastructure          ████████    ELEVATED
+Markets / Economy       █████       GUARDED
+Technology / AI         ███████     ELEVATED
+Energy                  ████        LOW
+
+Use actual calculated values.
+
+5. PRIMARY SIGNALS
+Select top 3–5.
+
+Each primary signal must include:
+SIGNAL:
+EVENT:
+CONTEXT:
+MECHANISM:
+WHY IT MATTERS:
+SYSTEM IMPACT:
+PRESSURE STATE:
+FORWARD OUTLOOK:
+WATCHPOINT:
+
+No generic filler.
+No one-line blurbs.
+
+6. SIGNAL MATRIX
+Group supporting signals by confidence:
+CONFIRMED
+LIKELY
+CONTESTED / UNKNOWN
+
+Each entry:
+[DOMAIN] Title — confidence — short significance
+
+Compress supporting signals. Do not dump 20 loose lines.
+
+7. SYSTEM MECHANICS
+Explain which systems are moving and how.
+
+8. SYSTEM INTERSECTION
+Explain cross-domain coupling.
+
+9. PRESSURE MAP
+- Pressure Building
+- Pressure Releasing
+- Pressure Transferring
+
+10. CONSTRAINTS
+Explain what could limit, delay, or alter trajectory.
+
+11. FORWARD PROJECTION
+- Continuation Path
+- Escalation Path
+- Stabilization Path
+- Failure Path
+
+12. OPERATOR TAKEAWAY
+Short, direct, useful.
+
+13. WATCHPOINTS
+Specific observable triggers.
+
+14. APPENDIX / COMPRESSED SUPPORTING SIGNALS
+Grouped by domain, not random order.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+10. FIX BRIEF QUALITY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Remove vague phrases like:
+- “Movement in the global operating environment”
+- “cross-domain secondary effect potential”
+- “monitor for trajectory change”
+unless they are tied to a specific mechanism.
+
+Every major signal must explain:
+- what happened
+- why it matters
+- what system it affects
+- what changes next
+
+If the system cannot explain why a signal matters, the signal should not be primary.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+11. PRINT / PDF DOCUMENT MODE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+The current print output looks too plain and weak.
+
+Upgrade print/PDF style to look like a serious internal intelligence document inspired by Pacific Systems docs.
+
+Print requirements:
+- clean white/gray document
+- Orbitron headings
+- strong title block
+- document metadata table
+- thin horizontal rules
+- clean section blocks
+- data summary boxes
+- domain chart table
+- page margins optimized
+- no giant walls of text
+- no browser UI styling
+- no dark console styling in print
+
+Print should produce professional 5–7 page PDFs for Full Briefs.
+
+Add print CSS:
+- @media print
+- page-break handling
+- section spacing
+- avoid cutting primary signal blocks mid-section when possible
+- readable font size
+- table styling
+
+━━━━━━━━━━━━━━━━━━━━━━━
+12. REPORT DISPLAY UI
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Improve on-screen report display.
+
+Current report box feels like raw text in a container.
+
+Upgrade it to:
+- structured sections
+- data cards/boxes
+- compact charts
+- readable hierarchy
+- dark console view
+- optional document view toggle if feasible
+
+Do not show a second duplicate copy of the brief unless it is the selected archive preview.
+Prevent duplicated current brief + archive preview confusion.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+13. ARCHIVE CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Archive should be clean.
+
+Rows:
+[DATE] — [THREAT] — [MODE] — [TITLE]
+
+Filters:
+Threat:
+ALL / LOW / GUARDED / ELEVATED / HIGH / CRITICAL
+
+Mode:
+ALL / QUICK / DAILY / WEEKLY / FULL
+
+Sort:
+NEWEST / OLDEST / THREAT
+
+Remove clutter.
+Keep archive preview useful but not visually dominant.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+14. LIVE QUEUE CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Live Queue should not feel like large social/news cards.
+
+Make it operator-grade:
+- compact rows/panels
+- title
+- source
+- domain
+- confidence
+- threat
+- short significance
+- controls compact
+
+Controls:
+Verify
+Mark Used
+Dismiss
+Exclude
+Pin
+Analyst Note
+
+No oversized buttons.
+No bright colors.
+No white scrollbars.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+15. EXPORTS
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Preserve and improve:
+- TXT
+- Article
+- Bulletin
+- Print
+
+TXT should include:
+- metadata
+- sections
+- clean spacing
+
+Article should become publishable analysis:
+- Headline
+- Subhead
+- Opening
+- Background
+- Current Developments
+- Mechanism Analysis
+- System-Level Implications
+- Forward Outlook
+- Closing Assessment
+
+Bulletin should include:
+- Threat Posture
+- Key Developments
+- Why It Matters
+- Strategic Implication
+- Watch Indicators
+
+━━━━━━━━━━━━━━━━━━━━━━━
+16. BUILD AND VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+After changes:
+- run npm run build
+- fix all errors
+- verify app loads
+- verify Pull Signals works
+- verify 2,000 intake does not freeze UI
+- verify Daily Brief
+- verify Full Brief
+- verify Print / Save PDF preview
+- verify Archive
+- verify TXT / Article / Bulletin exports
+
+Final response must include:
+- files changed
+- core changes made
+- build result
+- any known limitations
+
+FINAL GOAL:
+AXION v3.0 must feel like a real data-driven intelligence system:
+operator-grade UI, scientific scoring discipline, cleaner signals, deep 5–7 page briefs, professional PDF output, and zero purple UI contamination.
