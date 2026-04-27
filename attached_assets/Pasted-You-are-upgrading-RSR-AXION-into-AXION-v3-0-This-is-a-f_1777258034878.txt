@@ -1,0 +1,748 @@
+You are upgrading RSR AXION into AXION v3.0.
+
+This is a full system upgrade, not a small UI pass.
+
+Do NOT remove working functionality.
+Do NOT break signal ingestion, filtering, scoring, archive, exports, print, static deployment, or current EdgeOne workflow.
+
+The goal is to upgrade AXION from a working dashboard into a serious intelligence synthesis system with operator-grade UI, stronger signal logic, deeper reports, and 5–7 page executive intelligence brief capability.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+SYSTEM IDENTITY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Application:
+
+RSR AXION
+Intelligence Synthesis System v3.0
+
+AXION is not a news summarizer.
+AXION is not a dashboard.
+AXION is not a consumer AI tool.
+
+AXION is an intelligence synthesis system that transforms raw open-source signals into structured executive briefs.
+
+Core doctrine:
+
+Systems > Stories
+Patterns > Headlines
+Structures > Individuals
+
+AXION must map:
+- what happened
+- what system is moving
+- why it matters
+- what pressure it creates
+- what changes next
+- what to watch
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 1 — FULL VISUAL / UI OVERHAUL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Redesign the interface into an operator-level intelligence console.
+
+Use the design language from Pacific Systems internal documents:
+- sharp
+- institutional
+- black/steel
+- disciplined
+- Orbitron-based headers
+- minimal but authoritative
+
+The current AXION UI still feels too soft and app-like.
+
+Fix that.
+
+VISUAL RULES:
+
+1. Remove almost all purple.
+   - Purple may only remain as a tiny brand accent around the AXION wordmark or rare micro-highlight.
+   - No purple panels.
+   - No purple gradient fills.
+   - No glowing purple buttons.
+
+2. Base colors:
+   - near-black
+   - matte black
+   - charcoal
+   - gunmetal
+   - steel gray
+
+3. Accent colors:
+   - emerald green = active / verified / connected
+   - amber = elevated / watch / caution
+   - red = critical / failed / urgent
+   - cyan = rare data highlight only
+
+4. Typography:
+   - Orbitron for headings, system labels, console titles, major stats
+   - IBM Plex Mono or similar monospace for data, timestamps, labels, logs, archive entries
+   - clean sans-serif only if needed for long readable body text
+
+5. Layout:
+   - hard grid
+   - thin 1px borders
+   - squared or very slightly rounded corners only
+   - no bubbly cards
+   - no SaaS dashboard look
+   - panels should feel embedded into a system, not floating
+
+6. Motion:
+   - minimal
+   - fast
+   - no bounce
+   - no playful transitions
+   - subtle fade only
+
+7. Background:
+   - near-black
+   - optional faint orbital grid / world map / satellite-line texture at extremely low opacity
+   - professional orbital command atmosphere
+   - not sci-fi gimmick
+   - not cyberpunk
+
+Target feeling:
+
+“If this UI was on a screen in a classified facility, nobody would question it.”
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 2 — COMMAND HEADER
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade the header into a true command status bar.
+
+Include:
+- RSR AXION
+- Intelligence Synthesis System v3.0
+- local time
+- environment status
+- signal status
+- archive status
+- BlackDog security status
+- current mode: QUICK / DAILY / WEEKLY / FULL
+
+Example status chips:
+- ENV: LIVE
+- SIGNALS: ACTIVE
+- ARCHIVE: READY
+- SECURITY: CONNECTED
+- MODE: DAILY
+
+Keep this clean and compact.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 3 — BOOT SCREEN
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade the boot screen to match AXION v3.0.
+
+Requirements:
+- black / charcoal background
+- Orbitron title
+- restrained system startup feel
+- subtle orbital grid or scan-line only if tasteful
+- no hacker cliché
+- no flashy animation
+- 1.5–3 seconds max
+
+Include boot steps:
+- initializing signal layer
+- loading synthesis modules
+- verifying archive state
+- calibrating pressure model
+- preparing executive briefing console
+
+Bottom classification/status line:
+UNCLASSIFIED • RSR AXION • INTELLIGENCE SYNTHESIS SYSTEM
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 4 — SIGNAL DATA DOMAINS
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Expand signal domain categories.
+
+Every signal should be assigned one or more of these domains:
+
+- Global Affairs
+- Security / Defense
+- Infrastructure
+- Markets / Economy
+- Technology
+- Energy
+- AI / Compute
+- Supply Chains
+- Information Warfare
+- Cyber / Signals
+- Policy / Regulation
+- Governance / Institutions
+- Social Stability
+- Legal / Courts
+- Public Health / Biosecurity
+- Space / Orbital Systems
+
+Update classification logic so signals can be tagged more intelligently.
+
+Do not rely on shallow keyword matching only when avoidable.
+Use title + source + summary/context where available.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 5 — SIGNAL PROCESSING ENGINE v3
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade AXION’s signal processing logic.
+
+For every signal:
+
+1. Clean the signal
+   - remove weak phrasing
+   - normalize title
+   - remove noise
+   - strip irrelevant entertainment/sports/lifestyle unless directly tied to policy, security, technology, markets, or infrastructure
+
+2. Deduplicate
+   - merge overlapping signals
+   - keep strongest source/title
+   - preserve relevant domain diversity
+
+3. Classify confidence:
+   - CONFIRMED
+   - LIKELY
+   - CONTESTED
+   - UNKNOWN
+
+4. Score signal weight:
+   - 0–100
+   - based on severity, relevance, institutional impact, domain coupling, recency, and source confidence
+
+5. Assign domain(s)
+
+6. Assign threat level:
+   - LOW
+   - GUARDED
+   - ELEVATED
+   - HIGH
+   - CRITICAL
+
+7. Identify whether it is:
+   - isolated
+   - reinforcing
+   - converging
+   - escalating
+   - stabilizing
+   - fragmenting
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 6 — PRESSURE MODEL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add a pressure model to the brief logic and UI.
+
+AXION should identify:
+
+1. Pressure Building
+   - where stress is accumulating
+
+2. Pressure Releasing
+   - where risk is cooling or being absorbed
+
+3. Pressure Transferring
+   - where pressure is moving from one domain to another
+
+Examples:
+- energy pressure transferring into inflation
+- conflict pressure transferring into shipping and supply chains
+- technology policy pressure transferring into compute infrastructure
+- governance pressure transferring into legal or institutional domains
+
+This must appear in full briefs and daily/weekly reports.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 7 — REPORT MODES
+━━━━━━━━━━━━━━━━━━━━━━━
+
+AXION must support four report depths:
+
+1. QUICK BRIEF
+   - 3–6 signals
+   - 1 page equivalent
+   - fast operational summary
+
+2. DAILY BRIEF
+   - 8–15 signals
+   - 2–3 page equivalent
+   - practical daily intelligence product
+
+3. WEEKLY BRIEF
+   - 15–25 signals
+   - 4–6 page equivalent
+   - pattern-focused with trend continuity
+
+4. FULL INTELLIGENCE BRIEF
+   - 20–40 signals if available
+   - 5–7 page equivalent
+   - maximum depth
+   - executive-grade intelligence package
+
+Add UI support for FULL if missing.
+
+Button labels should be:
+- QUICK
+- DAILY
+- WEEKLY
+- FULL
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 8 — REPORT QUALITY STANDARD
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade every generated report so it is not just headlines and summaries.
+
+Reports must answer:
+- what happened
+- why it matters
+- what system is moving
+- what mechanism is driving it
+- what pressure it creates
+- what it affects
+- what comes next
+- what to monitor
+
+Tone:
+- calm
+- precise
+- disciplined
+- executive
+- no hype
+- no filler
+- no emotional language
+- no speculation as fact
+
+Reports should feel like serious intelligence products.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 9 — FULL REPORT STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Daily, Weekly, and Full Briefs must use this structure.
+
+HEADER:
+
+FROM THE OFFICE OF EXECUTIVE INTELLIGENCE
+RSR AXION — INTELLIGENCE SYNTHESIS SYSTEM v3.0
+Location: [browser local if available, otherwise Los Angeles, California]
+Date: [full date]
+Time: [24hr local time]
+INTELLIGENCE CYCLE: QUICK / DAILY / WEEKLY / FULL
+SIGNALS PROCESSED: [count]
+CYCLE CONFIDENCE: [score]/100
+
+1. EXECUTIVE OVERVIEW
+4–8 sentences.
+Explain overall operating picture.
+Name dominant pressure areas.
+State what changed.
+State what matters.
+
+2. THREAT POSTURE SUMMARY
+Include:
+- Overall Threat Posture
+- Conflict Index
+- Economic Stress Index
+- Infrastructure Exposure Index
+- Information / Policy Pressure Index
+- Technology / AI Index
+- Energy Index
+- Confidence Score
+
+3. PRIMARY SIGNALS
+Select the top 3–5 signals.
+
+Each must include:
+
+SIGNAL:
+CONTEXT:
+MECHANISM:
+WHY IT MATTERS:
+SYSTEM IMPACT:
+FORWARD OUTLOOK:
+WATCHPOINT:
+
+No one-line blurbs.
+
+4. SIGNAL MATRIX
+Group remaining signals by confidence:
+
+CONFIRMED
+LIKELY
+CONTESTED / UNKNOWN
+
+Each entry:
+- domain
+- title
+- confidence
+- one-line significance
+
+5. SYSTEM MECHANICS
+Explain what systems are moving:
+- policy
+- military/security
+- infrastructure
+- markets
+- energy
+- technology
+- AI/compute
+- supply chains
+- governance
+
+Only include systems relevant to the current signal set.
+
+6. SYSTEM INTERSECTION
+Explain cross-domain coupling:
+- Technology ↔ Policy
+- Conflict ↔ Infrastructure
+- Economy ↔ Governance
+- Energy ↔ Markets
+- AI ↔ Compute ↔ Regulation
+- Supply Chains ↔ Security
+- Media ↔ Influence
+
+7. PRESSURE MAP
+Include:
+- Pressure Building
+- Pressure Releasing
+- Pressure Transferring
+
+8. STRATEGIC INTERPRETATION
+Explain the broader meaning.
+Measured, analytical, controlled.
+No drama.
+
+9. CONSTRAINTS
+Explain what could limit, delay, stop, or alter the trajectory:
+- legal constraints
+- political resistance
+- resource limits
+- technical bottlenecks
+- market response
+- institutional limits
+
+10. FORWARD PROJECTION
+Include:
+- Continuation Path
+- Escalation Path
+- Stabilization Path
+- Failure Path
+
+11. OPERATOR TAKEAWAY
+Short.
+Direct.
+What the reader should walk away understanding.
+
+12. FORWARD WATCH INDICATORS
+Specific triggers to monitor next.
+
+13. APPENDIX / SUPPORTING SIGNALS
+Compact list of additional signals not used as primary drivers.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 10 — QUICK BRIEF STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Quick Briefs should not be bloated.
+
+Use:
+
+AXION QUICK BRIEF
+
+1. Executive Snapshot
+2. Current Posture
+3. Top 3 Signals
+4. What It Means
+5. Watch Next
+
+Each top signal still needs:
+- What happened
+- Why it matters
+- What to watch
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 11 — ARTICLE OUTPUT UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Article output must become publishable analysis.
+
+Structure:
+
+- Headline
+- Subhead
+- Opening Paragraph
+- Background Context
+- Current Developments
+- Mechanism Analysis
+- System-Level Implications
+- Forward Outlook
+- Closing Assessment
+
+Article should read like serious geopolitical / systems analysis, not summary.
+
+Do not overstate.
+Do not editorialize.
+Do not sensationalize.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 12 — BULLETIN OUTPUT UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Bulletin should remain concise but meaningful.
+
+Structure:
+
+- Threat Posture
+- Key Developments
+- Why It Matters
+- Strategic Implication
+- Watch Indicators
+
+Each item must explain why it matters.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 13 — BRIEF OUTPUT UI / DOCUMENT MODE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Upgrade the report rendering.
+
+Add a clean document mode inspired by Pacific Systems internal documents:
+- sharp white/gray print-ready document style
+- Orbitron section titles
+- thin horizontal rules
+- clean tables
+- strong page hierarchy
+- good for PDF/print/export
+
+AXION should support:
+- dark console view
+- print/document view
+
+Report display should not be cramped.
+Long briefs must render cleanly.
+
+Improve:
+- spacing
+- section hierarchy
+- readability
+- export formatting
+- print CSS
+
+5–7 page briefs must not feel like one giant wall of text.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 14 — LIVE SIGNAL QUEUE REDESIGN
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Redesign live queue to be more operator-grade.
+
+Replace bulky cards with compact signal rows or tighter panels.
+
+Each signal should show:
+- title
+- source
+- domain tag
+- confidence
+- threat level
+- short significance
+- controls
+
+Controls:
+- Verify
+- Mark Used
+- Dismiss
+- Exclude
+- Pin
+- Analyst Note
+
+Make controls compact.
+No clutter.
+No oversized cards.
+No bright scrollbars.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 15 — ARCHIVE REDESIGN
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Rebuild Intelligence Archive / Brief Archive.
+
+Structure:
+
+TOP:
+- title
+- clear button small and subtle
+
+SEARCH:
+- full-width search input
+- placeholder: Search archived briefs...
+
+FILTERS:
+Threat:
+ALL / LOW / GUARDED / ELEVATED / HIGH / CRITICAL
+
+Mode:
+ALL / QUICK / DAILY / WEEKLY / FULL
+
+Sort:
+NEWEST / OLDEST / THREAT
+
+RESULTS:
+Use compact rows:
+[DATE] — [THREAT] — [MODE] — [TITLE]
+
+Empty state:
+No archived briefs available.
+
+Remove:
+- duplicate boxes
+- placeholder cards
+- messy nested containers
+- “select archived brief” clutter
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 16 — SCROLLBAR SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Fix all scrollbars.
+
+Current scrollbars are too bright and distracting.
+
+Rules:
+- thin
+- dark
+- minimal
+- hidden or subtle until hover
+- no white scrollbars
+- no thick browser-looking scrollbars
+
+Apply to:
+- live queue
+- archive
+- report output
+- any scrollable panel
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 17 — EXPORT SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Preserve existing exports:
+- TXT
+- Article
+- Bulletin
+- Print
+
+Upgrade output formatting so exported text keeps:
+- section headers
+- metadata
+- signal structure
+- clean spacing
+
+Print output must use document mode styling.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 18 — SECURITY / ACCESS SURFACE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add or refine a login / access screen if one exists or if simple local gating is already present.
+
+Style:
+- operator-level
+- black / steel
+- Orbitron
+- minimal fields
+- no consumer login feel
+
+Suggested copy:
+RSR AXION
+INTELLIGENCE SYNTHESIS SYSTEM
+AUTHORIZED ACCESS ONLY
+Protected by BLACKDOG Security
+
+Do not add heavy auth architecture if it does not already exist.
+This is a UI/access surface pass unless auth already exists.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 19 — DATA CATEGORY UI
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add domain/category filtering if feasible without breaking the app.
+
+Domain filters:
+- All
+- Global Affairs
+- Security / Defense
+- Infrastructure
+- Markets / Economy
+- Technology
+- Energy
+- AI / Compute
+- Supply Chains
+- Policy / Regulation
+- Cyber / Signals
+
+Keep compact.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 20 — DO NOT BREAK
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Do not break:
+- Pull Signals
+- Run AXION
+- Quick Brief
+- Daily / Weekly
+- Archive
+- Exports
+- Print
+- Static EdgeOne deployment
+- Current data flow
+- Local persistence
+- signal filtering
+- signal scoring
+- verified / used / dismissed / excluded states
+
+No backend dependency if the app is currently static/client-side.
+Keep deployment compatible with EdgeOne static hosting.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+PART 21 — BUILD / VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+After changes:
+- run TypeScript check if available
+- run npm run build
+- fix all build errors
+- verify app loads
+- verify signal pull still works
+- verify report generation still works
+- verify archive still works
+- verify exports still work
+
+Provide a concise summary:
+- files changed
+- what changed
+- build result
+- any remaining issues
+
+━━━━━━━━━━━━━━━━━━━━━━━
+FINAL RESULT
+━━━━━━━━━━━━━━━━━━━━━━━
+
+AXION v3.0 should feel like:
+
+- an intelligence command terminal
+- an executive briefing engine
+- a systems-level analysis platform
+- a serious operator tool
+
+Not a dashboard.
+Not an AI toy.
+Not a purple app.
+
+It should look and read like a real internal intelligence system.

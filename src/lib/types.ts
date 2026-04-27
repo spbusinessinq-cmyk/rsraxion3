@@ -1,9 +1,43 @@
-export type Mode = "daily" | "weekly";
-export type BriefDepth = "full" | "quick";
+export type Mode = "daily" | "weekly" | "full";
+export type BriefDepth = "full" | "quick" | "daily" | "weekly";
 export type ExportKind = "txt" | "article" | "bulletin";
-export type ArchiveThreatFilter = "ALL" | "LOW" | "ELEVATED" | "HIGH" | "CRITICAL";
-export type ArchiveModeFilter = "ALL" | "daily" | "weekly" | "quick";
+export type ArchiveThreatFilter = "ALL" | "LOW" | "GUARDED" | "ELEVATED" | "HIGH" | "CRITICAL";
+export type ArchiveModeFilter = "ALL" | "quick" | "daily" | "weekly" | "full";
 export type ArchiveSort = "newest" | "oldest" | "threat";
-export type FeedEvent = { id: string; source: string; domain: string; title: string; summary: string; severity: number; confidence: number; timestamp: string; };
-export type ThreatMatrix = { overall: string; conflict: string; markets: string; infrastructure: string; information: string; };
-export type HistoryEntry = { id: string; issue: string; date: string; title: string; mode: Mode | "quick"; threat: string; brief: string; starred: boolean; };
+export type DomainFilter =
+  | "ALL"
+  | "Global Affairs"
+  | "Security / Defense"
+  | "Technology Systems"
+  | "Markets"
+  | "Domestic / Policy";
+
+export type FeedEvent = {
+  id: string;
+  source: string;
+  domain: string;
+  title: string;
+  summary: string;
+  severity: number;
+  confidence: number;
+  timestamp: string;
+};
+
+export type ThreatMatrix = {
+  overall: string;
+  conflict: string;
+  markets: string;
+  infrastructure: string;
+  information: string;
+};
+
+export type HistoryEntry = {
+  id: string;
+  issue: string;
+  date: string;
+  title: string;
+  mode: BriefDepth;
+  threat: string;
+  brief: string;
+  starred: boolean;
+};

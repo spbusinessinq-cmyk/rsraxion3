@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BlackdogStatus from "./components/BlackdogStatus";
 import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Globe, Newspaper, Pin, Printer, Radar, ScrollText, Search, Shield, Star, StarOff, Wand2, X, Zap } from "lucide-react";
-import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, ExportKind, FeedEvent, HistoryEntry, Mode, ThreatMatrix } from "./lib/types";
+import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, DomainFilter, ExportKind, FeedEvent, HistoryEntry, Mode, ThreatMatrix } from "./lib/types";
 import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, safeLoad, saveToStorage, scoreBand } from "./lib/utils";
 
-// cache-bust-v2
+// cache-bust-v3
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -278,6 +278,7 @@ export default function App() {
   const [manualVerified, setManualVerified] = useState<Record<string, boolean>>(() => safeLoad(STORAGE_KEYS.verified, {}));
   const [excludedIds, setExcludedIds] = useState<string[]>(() => safeLoad(STORAGE_KEYS.excluded, []));
   const [search, setSearch] = useState("");
+  const [domainFilter, setDomainFilter] = useState<DomainFilter>("ALL");
   const [executiveBrief, setExecutiveBrief] = useState("");
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
@@ -328,6 +329,7 @@ export default function App() {
     events
       .filter(e => !dismissed.includes(e.id))
       .filter(e => !excludedIds.includes(e.id))
+      .filter(e => domainFilter === "ALL" || e.domain === domainFilter)
       .filter(e => `${e.title} ${e.summary} ${e.domain} ${e.source}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
         const ap = !!pinned.find(r => r.id === a.id);
@@ -338,7 +340,7 @@ export default function App() {
         if (av !== bv) return Number(bv) - Number(av);
         return b.severity - a.severity;
       }),
-    [events, dismissed, excludedIds, search, manualVerified, pinned]
+    [events, dismissed, excludedIds, domainFilter, search, manualVerified, pinned]
   );
 
   const counts = useMemo(() => clusterCounts(visibleEvents), [visibleEvents]);
@@ -352,7 +354,7 @@ export default function App() {
   }, [counts]);
 
   const metricStrip = useMemo(() => [
-    { label: "RSR Verified", value: String(visibleEvents.filter(e => e.confidence >= 85 || !!manualVerified[e.id]).length), accent: "purple" },
+    { label: "RSR Verified", value: String(visibleEvents.filter(e => e.confidence >= 85 || !!manualVerified[e.id]).length), accent: "steel" },
     { label: "Live Signals", value: String(visibleEvents.length), accent: "white" },
     { label: "Used In Brief", value: String(Object.values(usedInBrief).filter(Boolean).length), accent: "amber" },
     { label: "Confidence", value: visibleEvents.length ? String(averageConfidence(visibleEvents)) : "—", accent: "green" },
@@ -380,7 +382,7 @@ export default function App() {
       return next;
     });
 
-    const briefTitle = depth === "quick" ? "Quick Brief" : mode === "weekly" ? "Weekly Brief" : "Daily Brief";
+    const briefTitle = depth === "quick" ? "Quick Brief" : mode === "weekly" ? "Weekly Brief" : mode === "full" ? "Full Brief" : "Daily Brief";
     const entry: HistoryEntry = {
       id: `archive-${Date.now()}`,
       issue: `Issue ${history.length + 1}`,
@@ -479,6 +481,7 @@ export default function App() {
         <div className="topbarRight">
           <button className={cx("btn modeBtn", mode === "daily" && "accent")} onClick={() => setMode("daily")}>Daily</button>
           <button className={cx("btn modeBtn", mode === "weekly" && "accent")} onClick={() => setMode("weekly")}>Weekly</button>
+          <button className={cx("btn modeBtn", mode === "full" && "accent")} onClick={() => setMode("full")}>Full</button>
           <BlackdogStatus />
         </div>
       </header>
@@ -610,6 +613,15 @@ export default function App() {
             <input className="input" placeholder="Search signals…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
 
+          {/* Domain Filter */}
+          <div className="domainFilterRow">
+            {(["ALL", "Global Affairs", "Security / Defense", "Technology Systems", "Markets", "Domestic / Policy"] as DomainFilter[]).map(d => (
+              <button key={d} className={cx("filterChip domainChip", domainFilter === d && "active")} onClick={() => setDomainFilter(d)}>
+                {d}
+              </button>
+            ))}
+          </div>
+
           {/* Live Signal Queue */}
           <div className="panel">
             <div className="inner">
@@ -736,7 +748,7 @@ export default function App() {
               <div className="filterSection">
                 <div className="filterLabel">Mode</div>
                 <div className="filterRow">
-                  {(["ALL", "daily", "weekly", "quick"] as ArchiveModeFilter[]).map(f => (
+                  {(["ALL", "daily", "weekly", "full", "quick"] as ArchiveModeFilter[]).map(f => (
                     <button key={f} className={cx("filterChip", archiveModeFilter === f && "active")} onClick={() => setArchiveModeFilter(f)}>{f}</button>
                   ))}
                 </div>
