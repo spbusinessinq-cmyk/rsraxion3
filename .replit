@@ -50,7 +50,7 @@ localPort = 5001
 externalPort = 3003
 
 [deployment]
-deploymentTarget = "static"
+deploymentTarget = "autoscale"
 build = ["sh", "-c", "npm run build"]
 publicDir = "dist"
-run = ["sh", "-c", "npm install && npm start"]
+run = ["sh", "-c", "node server.mjs"]

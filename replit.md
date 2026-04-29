@@ -28,12 +28,25 @@ Each feed is attempted with 4 strategies in sequence, stopping at first success:
 ## RSS XML Parser (`parseRssXml`)
 Browser DOMParser handles RSS 2.0 (`channel > item`) and Atom (`feed > entry`). Used by strategies 3 and 4 which proxy raw XML.
 
+## Build Version
+`BUILD_VERSION = "AXION-v3-signal-500-live"` — stored in `localStorage["rsr-axion-bv"]`.
+On first load or version change, session state (used/verified/excluded IDs) is cleared. History and notes are preserved.
+
+## Signal Debug Log (console)
+After every pull, `[AXION SIGNAL REPORT]` is logged to the console with:
+BUILD_VERSION · FEED_COUNT · PER_FEED · RAW_COLLECTED · PARSED · REJECTED · DEDUPED · USABLE · QUEUE_SIZE · FALLBACK_COUNT · FALLBACK_MODE · FEEDS_OK · ELAPSED_MS
+
 ## Dev Performance (Replit Preview)
 - Strategy 1 fails fast (~300ms/feed via 422)
 - Strategy 2 succeeds for ~51/78 feeds (~1-3s each)
 - Strategy 3 handles ~1-2 additional feeds
-- Total pull time: ~27-34 seconds for all 78 feeds
+- Total pull time: ~25-36 seconds for all 78 feeds
 - Consistent results: ok=51-53/78 · raw=997-1028 · scored=500
+
+## Deployment (Autoscale)
+Deployment changed from static EdgeOne to Autoscale (`deploymentTarget = "autoscale"`).
+Run command: `node server.mjs` — serves static build from `dist/` AND exposes `/api/proxy/rss`.
+This gives production the same Node.js proxy (Strategy 2) that dev uses, yielding 500 scored signals in production exactly as in preview. Static CDN was limited to ~95 signals because rss2json only worked for ~10-15 feeds and allorigins was overwhelmed by 78 simultaneous requests.
 
 ## v3.0 Intelligence Engine (Pass 2)
 
