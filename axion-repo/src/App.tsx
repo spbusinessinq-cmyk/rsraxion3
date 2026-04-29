@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import BlackdogStatus from "./components/BlackdogStatus";
 import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Globe, Newspaper, Pin, Printer, Radar, ScrollText, Search, Shield, Star, StarOff, Wand2, X, Zap } from "lucide-react";
-import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, ExportKind, FeedEvent, HistoryEntry, Mode, ThreatMatrix } from "./lib/types";
-import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, safeLoad, saveToStorage, scoreBand } from "./lib/utils";
+import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, DomainFilter, ExportKind, FeedEvent, FeedHealth, HistoryEntry, Mode, RejectionReason, SignalPipelineStats, ThreatMatrix } from "./lib/types";
+import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, getSourceTier, safeLoad, saveToStorage, scoreBand, scoreSignal } from "./lib/utils";
+
+// cache-bust-v4
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -21,12 +24,18 @@ const BOOT_STEPS = [
 ];
 
 const FALLBACK_SIGNALS: FeedEvent[] = [
-  { id: "fallback-1", source: "RSR Fallback Feed", domain: "Security / Defense", title: "Regional military signaling remains elevated across Middle East maritime lanes", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 4, confidence: 78, timestamp: new Date().toISOString() },
-  { id: "fallback-2", source: "RSR Fallback Feed", domain: "Markets", title: "Energy and shipping sensitivity remain central to the current market picture", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 3, confidence: 76, timestamp: new Date().toISOString() },
-  { id: "fallback-3", source: "RSR Fallback Feed", domain: "Technology Systems", title: "Compute and infrastructure buildout continue shaping the technical layer", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 2, confidence: 74, timestamp: new Date().toISOString() },
-  { id: "fallback-4", source: "RSR Fallback Feed", domain: "Domestic / Policy", title: "Federal policy activity adds pressure to the domestic operating picture", summary: "Institutional movement remains part of the cycle.", severity: 2, confidence: 72, timestamp: new Date().toISOString() },
-  { id: "fallback-5", source: "RSR Fallback Feed", domain: "Global Affairs", title: "Strategic shipping routes remain vulnerable to regional power signaling", summary: "Maritime pressure is still relevant to the broader intelligence cycle.", severity: 3, confidence: 75, timestamp: new Date().toISOString() },
+  { id: "fallback-1", source: "rsr-fallback", domain: "Security / Defense", title: "Regional military signaling remains elevated across Middle East maritime lanes", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 4, confidence: 72, timestamp: new Date().toISOString(), sourceTier: 4 },
+  { id: "fallback-2", source: "rsr-fallback", domain: "Markets / Economy", title: "Energy and shipping sensitivity remain central to the current market picture", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 3, confidence: 70, timestamp: new Date().toISOString(), sourceTier: 4 },
+  { id: "fallback-3", source: "rsr-fallback", domain: "AI / Compute", title: "AI compute infrastructure buildout continues reshaping the technical layer", summary: "Fallback signal loaded because the preview environment blocked live feed requests.", severity: 2, confidence: 68, timestamp: new Date().toISOString(), sourceTier: 4 },
+  { id: "fallback-4", source: "rsr-fallback", domain: "Policy / Regulation", title: "Federal policy activity adds pressure to the domestic operating picture", summary: "Institutional movement remains part of the cycle.", severity: 2, confidence: 66, timestamp: new Date().toISOString(), sourceTier: 4 },
+  { id: "fallback-5", source: "rsr-fallback", domain: "Global Affairs", title: "Strategic shipping routes remain vulnerable to regional power signaling", summary: "Maritime pressure is still relevant to the broader intelligence cycle.", severity: 3, confidence: 69, timestamp: new Date().toISOString(), sourceTier: 4 },
 ];
+
+const DEFAULT_PIPELINE_STATS: SignalPipelineStats = {
+  rawCount: 0, parsedCount: 0, rejectedCount: 0, rejectionBreakdown: {},
+  dedupCount: 0, usableCount: 0, successFeeds: 0, failFeeds: 0,
+  feedHealth: [], topDomains: [], weakDomains: [], elapsed: 0,
+};
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -56,153 +65,289 @@ function severityDots(s: number) {
 
 /* ── Domain Classifier ──────────────────────────────────────────────────── */
 
-function classifyDomain(title: string, fallback: string): string {
-  if (/military|missile|drone|defense|navy|air.?force|troops|combat|weapon|warship|fighter|bomb|strike|war|conflict|artillery/i.test(title)) return "Security / Defense";
-  if (/cyber|ransomware|hack|malware|infrastructure|ai\b|compute|chip|cloud|data.?breach|vulnerability|exploit|zero.?day|botnet/i.test(title)) return "Technology Systems";
-  if (/market|oil|energy|shipping|trade|treasury|inflation|equity|tariff|sanction|commodity|port|supply.?chain|crude|lng|brent|nasdaq|dow|freight/i.test(title)) return "Markets";
-  if (/white house|senate|congress|executive|agency|department|administration|federal|election|legislation|policy|vote|president|minister|parliament/i.test(title)) return "Domestic / Policy";
+function classifyDomain(title: string, summary: string, fallback: string): string {
+  const text = `${title} ${summary}`.toLowerCase();
+  if (/\b(military|missile|drone|defense|navy|air.?force|troops|combat|weapon|warship|fighter|bomb|strike|war|conflict|artillery|kinetic|battalion|brigade|invasion|offensive|siege|special.?forces|carrier.?group|tank|armored)\b/i.test(text)) return "Security / Defense";
+  if (/\b(ransomware|hack|malware|data.?breach|vulnerability|exploit|zero.?day|botnet|phishing|apt\b|threat.?actor|intrusion|cyber.?attack|incident.?response|patch|cve\b|firewall|signals.?intelligence|wiretap|surveillance|espionage)\b/i.test(text)) return "Cyber / Signals";
+  if (/\b(artificial.?intelligence|machine.?learning|ai.?model|generative|llm\b|gpu\b|semiconductor|chip.?shortage|compute|data.?center|nvidia|quantum.?computing|automation|algorithm|foundation.?model)\b/i.test(text)) return "AI / Compute";
+  if (/\b(oil|crude|brent|wti|opec|lng|natural.?gas|refinery|petroleum|fuel|energy.?price|power.?grid|nuclear.?plant|renewable.?energy|solar.?farm|wind.?farm|electricity.?grid|coal|hydropower)\b/i.test(text)) return "Energy";
+  if (/\b(supply.?chain|shipping.?lane|freight|logistics|container.?ship|port.?blockage|cargo|transit.?route|trade.?corridor|truck|rail.?freight|warehouse|just.?in.?time|inventory.?shortage)\b/i.test(text)) return "Supply Chains";
+  if (/\b(infrastructure|power.?outage|water.?system|dam|bridge|grid.?failure|critical.?infrastructure|blackout|sewer|pipeline|telecommunications|broadband|fiber.?optic|satellite.?system)\b/i.test(text)) return "Infrastructure";
+  if (/\b(market|stock|equity|bond|treasury|inflation|interest.?rate|central.?bank|federal.?reserve|ecb\b|tariff|trade.?war|gdp|recession|currency|forex|hedge.?fund|ipo\b|dow|nasdaq|s&p|financial.?crisis|bank.?run|debt.?ceiling)\b/i.test(text)) return "Markets / Economy";
+  if (/\b(white.?house|senate|congress|executive.?order|agency|federal.?agency|administration|federal|election|legislation|policy|vote|president|minister|parliament|cabinet|bill.?passed|regulatory|rulemaking|government.?shutdown)\b/i.test(text)) return "Policy / Regulation";
+  if (/\b(supreme.?court|federal.?court|indictment|prosecution|ruling|verdict|lawsuit|class.?action|antitrust|doj\b|legal.?challenge|injunction|appeals.?court|judicial|constitutional)\b/i.test(text)) return "Legal / Courts";
+  if (/\b(protest|unrest|riot|civil.?disorder|strike|labor.?dispute|demonstration|social.?movement|coup|political.?crisis|mass.?casualty|refugee|displacement|humanitarian)\b/i.test(text)) return "Social Stability";
+  if (/\b(pandemic|outbreak|pathogen|biosecurity|bioweapon|vaccine|public.?health.?emergency|who\b|disease|epidemic|quarantine|cdc\b|mutation|variant)\b/i.test(text)) return "Public Health / Biosecurity";
+  if (/\b(satellite|space.?station|orbit|nasa\b|spacex|rocket.?launch|space.?debris|gps.?interference|space.?weapon|anti.?satellite|lunar|mars|orbital)\b/i.test(text)) return "Space / Orbital Systems";
+  if (/\b(disinformation|propaganda|information.?warfare|influence.?operation|psyop|fake.?news|election.?interference|narrative|bot.?network|deepfake|social.?media.?campaign)\b/i.test(text)) return "Information Warfare";
+  if (/\b(diplomacy|summit|bilateral|multilateral|treaty|un.?security.?council|nato|sanctions|embassy|foreign.?minister|state.?department|geopolit|international.?relations|alliance|foreign.?policy)\b/i.test(text)) return "Global Affairs";
+  if (/\b(central.?bank|imf\b|world.?bank|monetary.?policy|governance|institution|regulatory.?body|government.?reform|anticorruption|transparency|accountability)\b/i.test(text)) return "Governance / Institutions";
   return fallback;
 }
 
-/* ── Browser Feed Sources ───────────────────────────────────────────────── */
+/* ── Browser Feed Sources (~70 curated feeds across all core domains) ─── */
 
 const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
-  // Global Affairs
-  { url: "https://feeds.bbci.co.uk/news/world/rss.xml",                        domain: "Global Affairs" },
-  { url: "https://www.aljazeera.com/xml/rss/all.xml",                          domain: "Global Affairs" },
-  { url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",             domain: "Global Affairs" },
-  { url: "https://rss.dw.com/rdf/rss-en-all",                                  domain: "Global Affairs" },
-  { url: "https://feeds.skynews.com/feeds/rss/world.xml",                      domain: "Global Affairs" },
-  { url: "https://feeds.npr.org/1001/rss.xml",                                 domain: "Global Affairs" },
-  { url: "https://feeds.a.dj.com/rss/RSSWorldNews.xml",                        domain: "Global Affairs" },
-  { url: "https://www.foreignaffairs.com/rss.xml",                             domain: "Global Affairs" },
-  { url: "https://foreignpolicy.com/feed/",                                    domain: "Global Affairs" },
-  { url: "https://theintercept.com/feed/?rss",                                 domain: "Global Affairs" },
-  { url: "https://www.theguardian.com/world/rss",                              domain: "Global Affairs" },
-  // Security / Defense
-  { url: "https://warontherocks.com/feed/",                                    domain: "Security / Defense" },
-  { url: "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",  domain: "Security / Defense" },
-  { url: "https://breakingdefense.com/feed/",                                  domain: "Security / Defense" },
-  { url: "https://www.thedrive.com/the-war-zone/rss",                          domain: "Security / Defense" },
-  { url: "https://www.defenseone.com/rss/all/",                                domain: "Security / Defense" },
-  { url: "https://www.navalnews.com/feed/",                                    domain: "Security / Defense" },
-  // Technology Systems / Cyber
-  { url: "https://krebsonsecurity.com/feed/",                                  domain: "Technology Systems" },
-  { url: "https://www.bleepingcomputer.com/feed/",                             domain: "Technology Systems" },
-  { url: "https://www.darkreading.com/rss.xml",                                domain: "Technology Systems" },
-  { url: "https://www.securityweek.com/feed/",                                 domain: "Technology Systems" },
-  { url: "https://threatpost.com/feed/",                                       domain: "Technology Systems" },
-  { url: "https://www.cisa.gov/news.xml",                                      domain: "Technology Systems" },
-  // Markets / Energy
-  { url: "https://www.theguardian.com/business/rss",                           domain: "Markets" },
-  { url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",              domain: "Markets" },
-  { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19836768", domain: "Markets" },
-  { url: "https://oilprice.com/rss/main",                                      domain: "Markets" },
-  { url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",         domain: "Markets" },
-  { url: "https://www.freightwaves.com/news/feed",                             domain: "Markets" },
-  // Domestic / Policy
-  { url: "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",          domain: "Domestic / Policy" },
-  { url: "https://thehill.com/feed/",                                          domain: "Domestic / Policy" },
-  { url: "https://rss.politico.com/politics-news.xml",                         domain: "Domestic / Policy" },
+  // ── Global Affairs (Tier 1 / 2 mix) ──
+  { url: "https://feeds.bbci.co.uk/news/world/rss.xml",                              domain: "Global Affairs" },
+  { url: "https://feeds.apnews.com/rss/apf-topnews",                                 domain: "Global Affairs" },
+  { url: "https://feeds.apnews.com/rss/apf-intlnews",                                domain: "Global Affairs" },
+  { url: "https://www.aljazeera.com/xml/rss/all.xml",                                domain: "Global Affairs" },
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/World.xml",                   domain: "Global Affairs" },
+  { url: "https://rss.dw.com/rdf/rss-en-all",                                        domain: "Global Affairs" },
+  { url: "https://feeds.skynews.com/feeds/rss/world.xml",                            domain: "Global Affairs" },
+  { url: "https://feeds.npr.org/1001/rss.xml",                                       domain: "Global Affairs" },
+  { url: "https://foreignpolicy.com/feed/",                                          domain: "Global Affairs" },
+  { url: "https://www.theguardian.com/world/rss",                                    domain: "Global Affairs" },
+  { url: "https://www.cfr.org/rss.xml",                                              domain: "Global Affairs" },
+  // ── Security / Defense ──
+  { url: "https://warontherocks.com/feed/",                                          domain: "Security / Defense" },
+  { url: "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",        domain: "Security / Defense" },
+  { url: "https://breakingdefense.com/feed/",                                        domain: "Security / Defense" },
+  { url: "https://www.thedrive.com/the-war-zone/rss",                                domain: "Security / Defense" },
+  { url: "https://www.defenseone.com/rss/all/",                                      domain: "Security / Defense" },
+  { url: "https://www.navalnews.com/feed/",                                          domain: "Security / Defense" },
+  { url: "https://www.understandingwar.org/feed",                                    domain: "Security / Defense" },
+  { url: "https://taskandpurpose.com/feed/",                                         domain: "Security / Defense" },
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",             domain: "Security / Defense" },
+  { url: "https://feeds.apnews.com/rss/apf-usnews",                                  domain: "Security / Defense" },
+  // ── Cyber / Signals ──
+  { url: "https://krebsonsecurity.com/feed/",                                        domain: "Cyber / Signals" },
+  { url: "https://www.bleepingcomputer.com/feed/",                                   domain: "Cyber / Signals" },
+  { url: "https://www.darkreading.com/rss.xml",                                      domain: "Cyber / Signals" },
+  { url: "https://www.securityweek.com/feed/",                                       domain: "Cyber / Signals" },
+  { url: "https://www.cisa.gov/news.xml",                                            domain: "Cyber / Signals" },
+  { url: "https://www.theregister.com/security/headlines.atom",                      domain: "Cyber / Signals" },
+  { url: "https://feeds.arstechnica.com/arstechnica/security",                       domain: "Cyber / Signals" },
+  { url: "https://www.zdnet.com/topic/security/rss.xml",                             domain: "Cyber / Signals" },
+  { url: "https://www.wired.com/feed/category/security/latest/rss",                  domain: "Cyber / Signals" },
+  // ── AI / Compute ──
+  { url: "https://techcrunch.com/category/artificial-intelligence/feed/",            domain: "AI / Compute" },
+  { url: "https://www.technologyreview.com/feed/",                                   domain: "AI / Compute" },
+  { url: "https://venturebeat.com/category/ai/feed/",                                domain: "AI / Compute" },
+  { url: "https://www.wired.com/feed/category/artificial-intelligence/latest/rss",  domain: "AI / Compute" },
+  { url: "https://www.theverge.com/rss/index.xml",                                   domain: "AI / Compute" },
+  // ── Markets / Economy ──
+  { url: "https://www.theguardian.com/business/rss",                                 domain: "Markets / Economy" },
+  { url: "https://www.cnbc.com/id/100003114/device/rss/rss.html",                    domain: "Markets / Economy" },
+  { url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=19836768", domain: "Markets / Economy" },
+  { url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",              domain: "Markets / Economy" },
+  { url: "https://feeds.apnews.com/rss/apf-business",                                domain: "Markets / Economy" },
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",                domain: "Markets / Economy" },
+  // ── Energy ──
+  { url: "https://oilprice.com/rss/main",                                            domain: "Energy" },
+  { url: "https://www.eia.gov/rss/press_rss.xml",                                    domain: "Energy" },
+  { url: "https://energymonitor.ai/feed",                                            domain: "Energy" },
+  { url: "https://www.offshore-energy.biz/feed/",                                    domain: "Energy" },
+  { url: "https://feeds.bbci.co.uk/news/business/rss.xml",                           domain: "Energy" },
+  // ── Supply Chains ──
+  { url: "https://www.freightwaves.com/news/feed",                                   domain: "Supply Chains" },
+  { url: "https://www.supplychaindive.com/feeds/news/",                              domain: "Supply Chains" },
+  { url: "https://www.logisticsmgmt.com/rss/",                                       domain: "Supply Chains" },
+  { url: "https://www.thomasnet.com/insights/feed/",                                 domain: "Supply Chains" },
+  // ── Policy / Regulation ──
+  { url: "https://rss.nytimes.com/services/xml/rss/nyt/Politics.xml",               domain: "Policy / Regulation" },
+  { url: "https://thehill.com/feed/",                                                domain: "Policy / Regulation" },
+  { url: "https://rss.politico.com/politics-news.xml",                              domain: "Policy / Regulation" },
+  { url: "https://www.brookings.edu/feed/",                                          domain: "Policy / Regulation" },
+  { url: "https://www.axios.com/feeds/feed.rss",                                     domain: "Policy / Regulation" },
+  { url: "https://feeds.apnews.com/rss/apf-politics",                                domain: "Policy / Regulation" },
+  { url: "https://www.federalregister.gov/articles/search.rss",                      domain: "Policy / Regulation" },
+  // ── Public Health / Biosecurity ──
+  { url: "https://www.who.int/rss-feeds/news-english.xml",                           domain: "Public Health / Biosecurity" },
+  { url: "https://www.statnews.com/feed/",                                           domain: "Public Health / Biosecurity" },
+  { url: "https://feeds.bbci.co.uk/news/health/rss.xml",                             domain: "Public Health / Biosecurity" },
+  { url: "https://feeds.apnews.com/rss/apf-Health",                                  domain: "Public Health / Biosecurity" },
+  // ── Space / Orbital Systems ──
+  { url: "https://www.space.com/feeds/all",                                          domain: "Space / Orbital Systems" },
+  { url: "https://spacenews.com/feed/",                                              domain: "Space / Orbital Systems" },
+  // ── Infrastructure ──
+  { url: "https://www.utilitydive.com/feeds/news/",                                  domain: "Infrastructure" },
+  { url: "https://www.enr.com/rss/news",                                             domain: "Infrastructure" },
+  // ── Information Warfare / Governance ──
+  { url: "https://feeds.bbci.co.uk/news/technology/rss.xml",                         domain: "Information Warfare" },
 ];
 
-/* ── Signal Exclusion Filter ────────────────────────────────────────────── */
+/* ── Signal Relevance Filter — with rejection reason codes ──────────────── */
 
-const EXCLUDED_KEYWORDS = [
-  "sports", "baseball", "soccer", "basketball", "football", "tennis", "golf",
-  "olympics", "nfl", "nba", "mlb", "nhl", "fifa", "world cup", "super bowl",
-  "entertainment", "celebrity", "celebrities", "movie", "movies", "film", "films",
-  "box office", "oscar", "grammy", "emmy", "music", "album", "concert", "tour",
-  "tv show", "television show", "sitcom", "reality show", "streaming show",
-  "fashion", "runway", "couture", "beauty tips", "makeup", "skincare",
-  "food", "recipe", "restaurant", "chef", "cooking", "cuisine",
-  "travel", "vacation", "tourist", "resort", "hotel", "cruise",
-  "lifestyle", "wellness", "fitness", "yoga", "diet", "weight loss",
-  "culture", "arts and crafts", "horoscope", "astrology",
-];
+const HARD_EXCLUDE_RE = /\b(sports|baseball|soccer|basketball|football|tennis|golf|olympics|nfl|nba|mlb|nhl|fifa|world.?cup|super.?bowl|playoffs|championship.?game|box.?office|oscar|grammy|emmy|album.?release|concert.?tour|sitcom|reality.?show|streaming.?show|fashion.?week|runway|couture|beauty.?tips|makeup|skincare|hair.?care|food.?recipe|restaurant.?review|chef|cooking.?show|travel.?tips|vacation.?resort|cruise.?ship|hotel.?deal|lifestyle.?blog|wellness.?tips|yoga.?class|weight.?loss|diet.?plan|horoscope|astrology|celebrity.?gossip|red.?carpet|dating.?tips|entertainment.?news|movie.?review|film.?review|video.?game.?review|k-pop|pop.?star|influencer|nfl.?draft|march.?madness|fantasy.?football|box.?office|awards.?show)\b/i;
 
-const EXCLUDED_RE = new RegExp(
-  `\\b(${EXCLUDED_KEYWORDS.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
-  "i"
-);
+const SPORTS_RE = /\b(nfl|nba|mlb|nhl|fifa|espn|sports|athlete|player|coach|team|game|score|touchdown|home.?run|goal|slam.?dunk|league|tournament|championship|playoff|standings)\b/i;
 
-function isRelevantSignal(title: string): boolean {
-  return !EXCLUDED_RE.test(title);
+const ENTERTAINMENT_RE = /\b(celebrity|oscar|grammy|emmy|album|concert|tour|sitcom|streaming.?show|reality.?tv|fashion|runway|makeup|skincare|yoga|weight.?loss|diet|horoscope|astrology|red.?carpet|dating|influencer|k.?pop|pop.?star|box.?office)\b/i;
+
+const LIFESTYLE_RE = /\b(recipe|restaurant|chef|cooking|travel.?tips|vacation|resort|cruise|hotel.?deal|wellness|lifestyle|beauty|hair.?care|food.?blog|home.?decor|interior.?design|gardening)\b/i;
+
+const STRATEGIC_SIGNALS_RE = /\b(military|defense|security|war|conflict|attack|missile|nato|nuclear|sanction|tariff|trade|market|oil|gas|energy|inflation|central.?bank|interest.?rate|geopolit|strategic|intelligence|infrastructure|cyber|ransomware|hack|malware|government|policy|legislation|regulation|congress|senate|parliament|president|minister|treasury|crisis|emergency|diplomatic|summit|treaty|alliance|espionage|surveillance|supply.?chain|shipping|logistics|freight|port|semiconductor|chip|ai\b|artificial.?intelligence|compute|data.?center|satellite|space|drone|carrier|submarine|warship|troops|battalion|brigade|invasion|protest|unrest|coup|pandemic|outbreak|biosecurity|public.?health|who\b|cdc\b|imf\b|world.?bank|opec|federal.?reserve|executive.?order|agency|ruling|court|lawsuit|indictment|breach|exploit|vulnerability)\b/i;
+
+function checkRelevance(title: string, summary: string = ""): { pass: boolean; reason?: RejectionReason } {
+  const text = `${title} ${summary}`;
+
+  if (!title.trim() || title.trim().length < 12) return { pass: false, reason: "EMPTY_SUMMARY" };
+
+  if (SPORTS_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "SPORTS_NOISE" };
+  if (ENTERTAINMENT_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "ENTERTAINMENT_NOISE" };
+  if (LIFESTYLE_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "LIFESTYLE_NOISE" };
+
+  if (HARD_EXCLUDE_RE.test(text) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "ENTERTAINMENT_NOISE" };
+
+  if (STRATEGIC_SIGNALS_RE.test(title)) return { pass: true };
+  if (STRATEGIC_SIGNALS_RE.test(summary)) return { pass: true };
+
+  return { pass: false, reason: "NO_SYSTEM_RELEVANCE" };
 }
 
-/* ── Client-side Signal Collection (rss2json CORS proxy) ────────────────── */
+/* ── Client-side Signal Collection ─────────────────────────────────────── */
 
 type Rss2JsonItem = { title?: string; link?: string; pubDate?: string; description?: string };
 type Rss2JsonResponse = { status: string; items?: Rss2JsonItem[] };
 
-async function collectSignals(): Promise<{ signals: FeedEvent[]; debug?: Record<string, unknown> }> {
-  const PER_FEED = 12;
+async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
+  const PER_FEED = 25;
   const started = Date.now();
-  let successCount = 0;
-  let failCount = 0;
 
-  const settled = await Promise.allSettled(
-    BROWSER_FEEDS.map(async ({ url, domain }) => {
-      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 8000);
-      try {
-        const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
-        clearTimeout(timer);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json() as Rss2JsonResponse;
-        if (data.status !== "ok" || !Array.isArray(data.items)) throw new Error("bad status");
-        const items: FeedEvent[] = data.items.slice(0, PER_FEED).flatMap(item => {
-          const title = (item.title ?? "").trim();
-          if (!title || title.length < 6) return [];
-          if (!isRelevantSignal(title)) return [];
-          const summary = (item.description ?? "")
-            .replace(/<[^>]+>/g, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 220);
-          let ts = new Date().toISOString();
-          try { if (item.pubDate) ts = new Date(item.pubDate).toISOString(); } catch { /* keep default */ }
-          return [{
-            id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            source: new URL(url).hostname.replace(/^(www|feeds|rss)\./i, ""),
-            domain: classifyDomain(title, domain),
-            title,
-            summary,
-            severity: Math.floor(Math.random() * 4) + 1,
-            confidence: 68 + Math.floor(Math.random() * 27),
-            timestamp: ts,
-          }];
-        });
-        successCount++;
-        return items;
-      } catch {
-        clearTimeout(timer);
-        failCount++;
-        return [] as FeedEvent[];
-      }
+  const feedHealth: FeedHealth[] = [];
+  let rawCount = 0;
+  let parsedCount = 0;
+  const rejectionBreakdown: Record<string, number> = {};
+
+  const BATCH_SIZE = 20;
+  const allBatches: Array<{ url: string; domain: string }[]> = [];
+  for (let i = 0; i < BROWSER_FEEDS.length; i += BATCH_SIZE) {
+    allBatches.push(BROWSER_FEEDS.slice(i, i + BATCH_SIZE) as { url: string; domain: string }[]);
+  }
+
+  const allRawEvents: FeedEvent[] = [];
+
+  for (const batch of allBatches) {
+    const settled = await Promise.allSettled(
+      batch.map(async ({ url, domain }) => {
+        const hostName = new URL(url).hostname.replace(/^(www|feeds|rss|feed)\./i, "");
+        const tier = getSourceTier(hostName);
+        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${PER_FEED}`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8500);
+
+        try {
+          const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
+          clearTimeout(timer);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json() as Rss2JsonResponse;
+          if (data.status !== "ok" || !Array.isArray(data.items)) throw new Error("bad status");
+
+          const feedItems: FeedEvent[] = [];
+          for (const item of data.items.slice(0, PER_FEED)) {
+            rawCount++;
+            const title = (item.title ?? "").trim();
+            const summary = (item.description ?? "")
+              .replace(/<[^>]+>/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, 300);
+
+            const check = checkRelevance(title, summary);
+            if (!check.pass) {
+              const reason = check.reason ?? "NO_SYSTEM_RELEVANCE";
+              rejectionBreakdown[reason] = (rejectionBreakdown[reason] ?? 0) + 1;
+              continue;
+            }
+
+            parsedCount++;
+            let ts = new Date().toISOString();
+            try { if (item.pubDate) ts = new Date(item.pubDate).toISOString(); } catch { /* keep default */ }
+
+            const rawEvent: FeedEvent = {
+              id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              source: hostName,
+              domain: classifyDomain(title, summary, domain),
+              title,
+              summary,
+              severity: 1,
+              confidence: 70,
+              timestamp: ts,
+              sourceTier: tier,
+              sourceCount: 1,
+            };
+            feedItems.push(rawEvent);
+          }
+
+          feedHealth.push({ source: hostName, domain, success: true, itemCount: feedItems.length, lastChecked: new Date().toISOString() });
+          return feedItems;
+        } catch (err) {
+          clearTimeout(timer);
+          const errorType = err instanceof Error ? (err.name === "AbortError" ? "TIMEOUT" : err.message) : "UNKNOWN";
+          feedHealth.push({ source: hostName, domain, success: false, itemCount: 0, errorType, lastChecked: new Date().toISOString() });
+          return [] as FeedEvent[];
+        }
+      })
+    );
+    settled.forEach(r => { if (r.status === "fulfilled") allRawEvents.push(...r.value); });
+  }
+
+  const successFeeds = feedHealth.filter(f => f.success).length;
+  const failFeeds = feedHealth.filter(f => !f.success).length;
+
+  /* ── Corroboration: group by normalized title prefix, merge duplicates ── */
+  const groups = new Map<string, FeedEvent[]>();
+  for (const ev of allRawEvents) {
+    const key = ev.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 50);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(ev);
+  }
+
+  const dedupedRaw: FeedEvent[] = [];
+  for (const group of groups.values()) {
+    // Keep the signal with the best tier (lowest number), then longest summary
+    const best = group.sort((a, b) => {
+      const tierA = a.sourceTier ?? 4;
+      const tierB = b.sourceTier ?? 4;
+      if (tierA !== tierB) return tierA - tierB;
+      return (b.summary?.length ?? 0) - (a.summary?.length ?? 0);
+    })[0];
+
+    const corroborated = group.length > 1;
+    dedupedRaw.push({
+      ...best,
+      sourceCount: group.length,
+      corroborated,
+    });
+  }
+
+  // Apply multi-factor scoring to all deduped signals
+  const scored = dedupedRaw.map(e => scoreSignal(e));
+
+  // Sort by priority: confidence × 0.6 + severity × 10 + recency bonus
+  const now = Date.now();
+  const signals = scored
+    .sort((a, b) => {
+      const recA = Math.max(0, 1 - (now - new Date(a.timestamp).getTime()) / (72 * 3600000));
+      const recB = Math.max(0, 1 - (now - new Date(b.timestamp).getTime()) / (72 * 3600000));
+      const scoreA = a.confidence * 0.55 + a.severity * 10 + recA * 8 + ((a.sourceCount ?? 1) > 1 ? 6 : 0);
+      const scoreB = b.confidence * 0.55 + b.severity * 10 + recB * 8 + ((b.sourceCount ?? 1) > 1 ? 6 : 0);
+      return scoreB - scoreA;
     })
-  );
+    .slice(0, 500);
 
-  const raw = settled.flatMap(r => r.status === "fulfilled" ? r.value : []);
+  // Domain distribution stats
+  const domainCounts: Record<string, number> = {};
+  signals.forEach(e => { domainCounts[e.domain] = (domainCounts[e.domain] ?? 0) + 1; });
+  const topDomains = Object.entries(domainCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([domain, count]) => ({ domain, count }));
+  const weakDomains = topDomains.filter(d => d.count < 3).map(d => d.domain);
 
-  const seen = new Set<string>();
-  const signals = raw
-    .filter(e => {
-      const key = e.title.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 48);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    .slice(0, 300);
-
+  const rejectedCount = rawCount - parsedCount;
   const elapsed = Date.now() - started;
-  console.log(`[AXION] collectSignals feeds=${BROWSER_FEEDS.length} ok=${successCount} fail=${failCount} raw=${raw.length} deduped=${signals.length} time=${elapsed}ms`);
+
+  console.log(`[AXION] feeds=${BROWSER_FEEDS.length} ok=${successFeeds} fail=${failFeeds} raw=${rawCount} parsed=${parsedCount} rejected=${rejectedCount} deduped=${dedupedRaw.length} scored=${signals.length} time=${elapsed}ms`);
 
   return {
     signals,
-    debug: { successFeeds: successCount, failFeeds: failCount, rawCount: raw.length, elapsed },
+    stats: {
+      rawCount, parsedCount, rejectedCount, rejectionBreakdown,
+      dedupCount: dedupedRaw.length, usableCount: signals.length,
+      successFeeds, failFeeds, feedHealth, topDomains, weakDomains, elapsed,
+    },
   };
 }
 
@@ -275,10 +420,13 @@ export default function App() {
   const [manualVerified, setManualVerified] = useState<Record<string, boolean>>(() => safeLoad(STORAGE_KEYS.verified, {}));
   const [excludedIds, setExcludedIds] = useState<string[]>(() => safeLoad(STORAGE_KEYS.excluded, []));
   const [search, setSearch] = useState("");
+  const [domainFilter, setDomainFilter] = useState<DomainFilter>("ALL");
   const [executiveBrief, setExecutiveBrief] = useState("");
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [pipelineStats, setPipelineStats] = useState<SignalPipelineStats>(DEFAULT_PIPELINE_STATS);
+  const [rawSignalCount, setRawSignalCount] = useState(0);
   const [threatMatrix, setThreatMatrix] = useState<ThreatMatrix>({ overall: "GUARDED", conflict: "LOW", markets: "LOW", infrastructure: "LOW", information: "LOW" });
 
   useEffect(() => saveToStorage(STORAGE_KEYS.history, history), [history]);
@@ -292,28 +440,25 @@ export default function App() {
     setLoading(true);
     setStatusMessage("");
     try {
-      const { signals, debug } = await collectSignals();
+      const { signals, stats } = await collectSignals();
       const live = signals.length > 0;
       const usable = live ? signals : FALLBACK_SIGNALS;
       setUsingFallback(!live);
       setEvents(usable);
+      setPipelineStats(stats);
+      setRawSignalCount(stats.rawCount);
       setPinned([]);
       setDismissed([]);
       if (live) {
-        const ok = (debug as { successFeeds?: number } | undefined)?.successFeeds;
-        const fail = (debug as { failFeeds?: number } | undefined)?.failFeeds;
-        const feedInfo = (ok != null && fail != null) ? ` (${ok}/${ok + fail} feeds)` : "";
-        setStatusMessage(`Live signals pulled: ${signals.length}${feedInfo}`);
+        setStatusMessage(`${stats.usableCount} usable · ${stats.successFeeds}/${stats.successFeeds + stats.failFeeds} feeds · ${stats.rawCount} raw`);
       } else {
-        const reason = (debug as { failFeeds?: number } | undefined)?.failFeeds != null
-          ? `0 of ${(debug as { failFeeds: number }).failFeeds} feeds responded`
-          : "no live signals returned";
-        setStatusMessage(`Fallback mode — ${reason}.`);
-        console.warn("[AXION] fallback activated —", debug ?? "no debug info");
+        setStatusMessage(`Fallback mode — 0/${stats.failFeeds} feeds responded.`);
+        console.warn("[AXION] fallback activated. Feed health:", stats.feedHealth.filter(f => !f.success).map(f => `${f.source}:${f.errorType}`).join(", "));
       }
     } catch (err) {
       setUsingFallback(true);
       setEvents(FALLBACK_SIGNALS);
+      setPipelineStats(DEFAULT_PIPELINE_STATS);
       setStatusMessage("Fallback mode — ingestion error.");
       console.error("[AXION] ingestSignals caught:", err);
     } finally {
@@ -325,6 +470,12 @@ export default function App() {
     events
       .filter(e => !dismissed.includes(e.id))
       .filter(e => !excludedIds.includes(e.id))
+      .filter(e => {
+        if (domainFilter === "ALL") return true;
+        if (e.domain === domainFilter) return true;
+        if (domainFilter === "Technology") return /Technology|AI.*Compute|Cyber|Space/.test(e.domain);
+        return false;
+      })
       .filter(e => `${e.title} ${e.summary} ${e.domain} ${e.source}`.toLowerCase().includes(search.toLowerCase()))
       .sort((a, b) => {
         const ap = !!pinned.find(r => r.id === a.id);
@@ -335,7 +486,7 @@ export default function App() {
         if (av !== bv) return Number(bv) - Number(av);
         return b.severity - a.severity;
       }),
-    [events, dismissed, excludedIds, search, manualVerified, pinned]
+    [events, dismissed, excludedIds, domainFilter, search, manualVerified, pinned]
   );
 
   const counts = useMemo(() => clusterCounts(visibleEvents), [visibleEvents]);
@@ -348,15 +499,33 @@ export default function App() {
     return out;
   }, [counts]);
 
+  // Pipeline-aware metric strip: RAW / USABLE / QUEUE / USED
   const metricStrip = useMemo(() => [
-    { label: "RSR Verified", value: String(visibleEvents.filter(e => e.confidence >= 85 || !!manualVerified[e.id]).length), accent: "purple" },
-    { label: "Live Signals", value: String(visibleEvents.length), accent: "white" },
-    { label: "Used In Brief", value: String(Object.values(usedInBrief).filter(Boolean).length), accent: "amber" },
-    { label: "Confidence", value: visibleEvents.length ? String(averageConfidence(visibleEvents)) : "—", accent: "green" },
-  ], [visibleEvents, manualVerified, usedInBrief]);
+    {
+      label: "Raw Collected",
+      value: rawSignalCount > 0 ? String(rawSignalCount) : "—",
+      accent: "steel",
+    },
+    {
+      label: "Usable Signals",
+      value: pipelineStats.usableCount > 0 ? String(pipelineStats.usableCount) : String(visibleEvents.length),
+      accent: "white",
+    },
+    {
+      label: "Used In Brief",
+      value: String(Object.values(usedInBrief).filter(Boolean).length),
+      accent: "amber",
+    },
+    {
+      label: "Confidence",
+      value: visibleEvents.length ? String(averageConfidence(visibleEvents)) : "—",
+      accent: "green",
+    },
+  ], [rawSignalCount, pipelineStats, visibleEvents, usedInBrief]);
 
   function generateBrief(depth: BriefDepth) {
-    const sourceSet = (pinned.length ? pinned : visibleEvents).slice(0, depth === "quick" ? 5 : 16);
+    const signalLimit = depth === "quick" ? 6 : mode === "full" ? 40 : mode === "weekly" ? 25 : 15;
+    const sourceSet = (pinned.length ? pinned : visibleEvents).slice(0, signalLimit);
     const c = clusterCounts(sourceSet);
     const nextMatrix: ThreatMatrix = {
       overall: scoreBand(Math.max(c.conflict, c.markets, c.infrastructure, c.information) + Math.min(2, patterns.length)),
@@ -368,7 +537,9 @@ export default function App() {
     setThreatMatrix(nextMatrix);
 
     const now = new Date();
-    const brief = buildFullBrief(sourceSet, nextMatrix, patterns, mode, depth, now);
+    // Pass pipeline stats as optional 7th argument for data tables in brief
+    const statsForBrief = pipelineStats.rawCount > 0 ? pipelineStats : undefined;
+    const brief = buildFullBrief(sourceSet, nextMatrix, patterns, mode, depth, now, statsForBrief);
     setExecutiveBrief(brief);
 
     setUsedInBrief(prev => {
@@ -377,7 +548,7 @@ export default function App() {
       return next;
     });
 
-    const briefTitle = depth === "quick" ? "Quick Brief" : mode === "weekly" ? "Weekly Brief" : "Daily Brief";
+    const briefTitle = depth === "quick" ? "Quick Brief" : mode === "weekly" ? "Weekly Brief" : mode === "full" ? "Full Brief" : "Daily Brief";
     const entry: HistoryEntry = {
       id: `archive-${Date.now()}`,
       issue: `Issue ${history.length + 1}`,
@@ -476,6 +647,8 @@ export default function App() {
         <div className="topbarRight">
           <button className={cx("btn modeBtn", mode === "daily" && "accent")} onClick={() => setMode("daily")}>Daily</button>
           <button className={cx("btn modeBtn", mode === "weekly" && "accent")} onClick={() => setMode("weekly")}>Weekly</button>
+          <button className={cx("btn modeBtn", mode === "full" && "accent")} onClick={() => setMode("full")}>Full</button>
+          <BlackdogStatus />
         </div>
       </header>
 
@@ -606,6 +779,15 @@ export default function App() {
             <input className="input" placeholder="Search signals…" value={search} onChange={e => setSearch(e.target.value)} />
           </div>
 
+          {/* Domain Filter */}
+          <div className="domainFilterRow">
+            {(["ALL", "Global Affairs", "Security / Defense", "Cyber / Signals", "Technology", "Markets / Economy", "Energy", "Policy / Regulation", "Infrastructure"] as DomainFilter[]).map(d => (
+              <button key={d} className={cx("filterChip domainChip", domainFilter === d && "active")} onClick={() => setDomainFilter(d)}>
+                {d}
+              </button>
+            ))}
+          </div>
+
           {/* Live Signal Queue */}
           <div className="panel">
             <div className="inner">
@@ -638,6 +820,10 @@ export default function App() {
                         {/* Meta row: source, confidence, severity */}
                         <div className="eventMeta">
                           <span className="metaSource">{event.source}</span>
+                          {event.sourceTier && <span className="metaSep">·</span>}
+                          {event.sourceTier && <span className="metaSource" style={{ opacity: 0.55 }}>T{event.sourceTier}</span>}
+                          {event.corroborated && <span className="metaSep">·</span>}
+                          {event.corroborated && <span className="metaSource" style={{ color: "#7dd3fc", opacity: 0.8 }}>◆{event.sourceCount}</span>}
                           <span className="metaSep">·</span>
                           <span className={cx("metaConf", confidenceClass(event.confidence))}>
                             {confidenceLabel(event.confidence)} {event.confidence}%
@@ -657,6 +843,7 @@ export default function App() {
                           {isVerified && <span className="eTag eTagVerified"><CheckCircle2 size={10} /> Verified</span>}
                           {isUsed && <span className="eTag eTagUsed">Used in brief</span>}
                           {isExcluded && <span className="eTag eTagExcluded"><EyeOff size={10} /> Excluded</span>}
+                          {event.corroborated && <span className="eTag eTagVerified">◆ Corroborated</span>}
                         </div>
 
                         {/* Actions */}
@@ -732,7 +919,7 @@ export default function App() {
               <div className="filterSection">
                 <div className="filterLabel">Mode</div>
                 <div className="filterRow">
-                  {(["ALL", "daily", "weekly", "quick"] as ArchiveModeFilter[]).map(f => (
+                  {(["ALL", "daily", "weekly", "full", "quick"] as ArchiveModeFilter[]).map(f => (
                     <button key={f} className={cx("filterChip", archiveModeFilter === f && "active")} onClick={() => setArchiveModeFilter(f)}>{f}</button>
                   ))}
                 </div>
@@ -782,37 +969,29 @@ export default function App() {
                           onChange={e => setRenameValue(e.target.value)}
                           placeholder="Brief title…"
                         />
-                        <button className="smallBtn" onClick={() => setHistory(prev => prev.map(e => e.id === selectedArchive.id ? { ...e, title: renameValue } : e))}>
+                        <button className="btn" style={{ fontSize: "0.72rem", padding: "4px 10px" }}
+                          onClick={() => setHistory(prev => prev.map(e => e.id === selectedArchive.id ? { ...e, title: renameValue } : e))}>
                           Save
                         </button>
                         <button
-                          className={cx("smallBtn", selectedArchive.starred && "warn")}
+                          className={cx("btn", selectedArchive.starred && "accent")}
+                          style={{ fontSize: "0.72rem", padding: "4px 10px" }}
                           onClick={() => setHistory(prev => prev.map(e => e.id === selectedArchive.id ? { ...e, starred: !e.starred } : e))}
                         >
                           {selectedArchive.starred ? <StarOff size={12} /> : <Star size={12} />}
                         </button>
-                        <button className="smallBtn" onClick={() => { downloadTextFile(`rsr-axion-${selectedArchive.id}.txt`, selectedArchive.brief); setStatusMessage("Exported."); }}>
-                          <Download size={12} />
-                        </button>
-                        <button className="smallBtn warn" onClick={() => { setHistory(prev => prev.filter(e => e.id !== selectedArchive.id)); setSelectedArchiveId(null); }}>
-                          <X size={12} />
+                        <button className="btn" style={{ fontSize: "0.72rem", padding: "4px 10px", color: "#fca5a5" }}
+                          onClick={() => {
+                            setHistory(prev => prev.filter(e => e.id !== selectedArchive.id));
+                            setSelectedArchiveId(null);
+                          }}>
+                          Delete
                         </button>
                       </div>
-
-                      <div className="archiveTags">
-                        <span className={cx("tag", selectedArchive.threat.toLowerCase())}>{selectedArchive.threat}</span>
-                        <span className="tag">{selectedArchive.mode}</span>
-                        <span className="tag">{selectedArchive.date}</span>
-                        <span className="tag">{selectedArchive.issue}</span>
-                      </div>
-
-                      <div className="archiveText">{selectedArchive.brief}</div>
-
                       <textarea
-                        className="note"
-                        placeholder="Analyst note on this archive entry…"
-                        value={analystNotes[selectedArchive.id] || ""}
-                        onChange={e => setAnalystNotes(prev => ({ ...prev, [selectedArchive.id]: e.target.value }))}
+                        className="archiveText"
+                        readOnly
+                        value={selectedArchive.brief}
                       />
                     </div>
                   )}
