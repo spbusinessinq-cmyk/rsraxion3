@@ -1,0 +1,161 @@
+Overhaul the AXION PDF/Print report design completely.
+
+Goal:
+Transform the current plain-text output into a structured, professional intelligence document system.
+
+Do NOT change the intelligence content logic.
+Do NOT reduce information.
+Only improve layout, hierarchy, readability, and visual structure.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+1. GLOBAL PRINT STYLE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Use:
+- white background
+- black text (#0A0A0A)
+- gray accents (#6B7280)
+- thin divider lines
+- generous spacing
+- clean margins (24–32px)
+
+Fonts:
+- Headers: Orbitron
+- Body: Inter or system sans
+- Data: monospace ONLY for tables
+
+━━━━━━━━━━━━━━━━━━━━━━━
+2. COVER PAGE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add a clean cover page:
+
+- Title: "AXION INTELLIGENCE BRIEF"
+- Sub: "RSR AXION – Intelligence Synthesis System"
+- Location / Date / Time
+- Intelligence Cycle
+- Threat Level (boxed and bold)
+- Horizontal divider lines
+
+━━━━━━━━━━━━━━━━━━━━━━━
+3. SECTION STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Convert all sections into clearly separated blocks:
+
+- EXECUTIVE SUMMARY
+- THREAT POSTURE
+- DATA SUMMARY
+- PRIMARY SIGNALS
+- SYSTEM ANALYSIS
+- CONSTRAINTS
+- PROJECTION
+- OPERATOR TAKEAWAY
+
+Each section:
+- uppercase header
+- spaced divider
+- clean block layout
+
+━━━━━━━━━━━━━━━━━━━━━━━
+4. THREAT POSTURE VISUALS
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Replace plain text with visual bar indicators:
+
+Example:
+OVERALL POSTURE   ██████████ CRITICAL
+
+Use proportional bars for:
+- conflict
+- economy
+- infrastructure
+- policy
+
+━━━━━━━━━━━━━━━━━━━━━━━
+5. PRIMARY SIGNAL CARDS
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Render each signal as a boxed card:
+
+- bordered container
+- spacing between cards
+- header line with:
+  domain | confidence | tier | corroboration
+
+Inside each card:
+- EVENT
+- MECHANISM
+- SYSTEM IMPACT
+- PRESSURE STATE
+- FORWARD
+- WATCHPOINTS
+
+No long paragraphs — break into readable blocks.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+6. DATA TABLES
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Render structured tables:
+
+- Signal pipeline table
+- Source tier distribution
+- Domain distribution (with text bars)
+- Pressure vector table
+
+Use proper table styling:
+- borders
+- padding
+- aligned columns
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7. REMOVE TERMINAL STYLE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Remove:
+- full monospace blocks
+- raw text dumps
+- dense paragraphs
+
+Replace with:
+- structured layout
+- spacing
+- readable formatting
+
+━━━━━━━━━━━━━━━━━━━━━━━
+8. PAGE FLOW
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Ensure the document prints cleanly across 5–7 pages:
+
+- no section overflow issues
+- no cut-off blocks
+- proper page breaks
+- use page-break-before where needed
+
+━━━━━━━━━━━━━━━━━━━━━━━
+9. FINAL OUTPUT
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Keep compatibility with:
+- browser print
+- Save as PDF
+- existing export buttons
+
+Do not break:
+- content generation
+- archive system
+- UI export triggers
+
+━━━━━━━━━━━━━━━━━━━━━━━
+FINAL GOAL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+The report should feel like:
+- an official intelligence document
+- clean, structured, and readable
+- not a developer output
+- not a terminal dump
+
+It should visually match the level of the AXION system.

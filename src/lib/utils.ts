@@ -1090,66 +1090,564 @@ export function buildBulletin(
 ═══════════════════════════════════════════════════════════ */
 
 export function buildPrintHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  const lines = text.split("\n");
+  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-  const div = "━".repeat(85);
+  /* ── Extract header metadata ──────────────────────────────────────────── */
+  const meta: Record<string, string> = {};
+  for (let i = 0; i < Math.min(20, lines.length); i++) {
+    const line = lines[i];
+    if (line.includes("RSR AXION — ") && line.includes("BRIEF")) meta["briefTitle"] = esc(line.replace("RSR AXION — ", "").trim());
+    const kv = line.match(/^([A-Za-z][^:]{2,40}):\s*(.+)$/);
+    if (kv) meta[kv[1].trim()] = esc(kv[2].trim());
+  }
+  const metaDate = meta["Date"] || "";
+  const metaTime = meta["Time"] || "";
+  const metaLoc = meta["Location"] || "";
+  const metaCycle = meta["INTELLIGENCE CYCLE"] || "";
+  const metaSignals = meta["SIGNALS PROCESSED"] || "";
+  const metaConf = meta["CYCLE CONFIDENCE"] || "";
+  const metaCorroboration = meta["CORROBORATED SIGNALS"] || "";
+  const metaPipeline = meta["PIPELINE"] || "";
+  const briefTitle = meta["briefTitle"] || "INTELLIGENCE BRIEF";
 
-  const formatted = escaped
-    .split("\n")
-    .map(line => {
-      if (line.startsWith("RSR AXION —") || line.startsWith("FROM THE OFFICE")) {
-        return `<div class="doc-title">${line}</div>`;
+  /* ── Split into sections ────────────────────────────────────────────────── */
+  const sections: Record<string, string[]> = { cover: [] };
+  let current = "cover";
+  for (const line of lines) {
+    if (line.startsWith("━━━")) continue;
+    const sec = line.match(/^(§\d+)\s+(.+)$/);
+    if (sec) { current = sec[1]; sections[current] = []; continue; }
+    sections[current] = sections[current] || [];
+    sections[current].push(line);
+  }
+
+  /* ── Threat bar renderer ───────────────────────────────────────────────── */
+  function threatBar(level: string): string {
+    const cfg: Record<string, [number, string]> = {
+      CRITICAL: [100, "#dc2626"], HIGH: [80, "#ea580c"], ELEVATED: [60, "#d97706"],
+      GUARDED: [40, "#b45309"], LOW: [12, "#9ca3af"],
+    };
+    const [pct, color] = cfg[level?.toUpperCase()] ?? cfg["LOW"];
+    return `<div class="tbar"><div class="tbar-track"><div class="tbar-fill" style="width:${pct}%;background:${color}"></div></div><span class="tbar-lbl" style="color:${color}">${esc(level || "LOW")}</span></div>`;
+  }
+
+  /* ── Confidence badge ──────────────────────────────────────────────────── */
+  function confBadge(level: string): string {
+    const color = level === "CONFIRMED" ? "#16a34a" : level === "LIKELY" ? "#0284c7" : level === "CONTESTED" ? "#d97706" : "#6b7280";
+    return `<span class="cbadge" style="background:${color}20;color:${color};border:1px solid ${color}60">${esc(level)}</span>`;
+  }
+
+  /* ── §2 Threat Posture — visual bars ───────────────────────────────────── */
+  function renderThreatPosture(slines: string[]): string {
+    const rows: string[] = [];
+    for (const l of slines) {
+      const m = l.match(/^(.{20,50}?):\s*(CRITICAL|HIGH|ELEVATED|GUARDED|LOW|\d+\/100)/i);
+      if (m) {
+        const label = esc(m[1].trim());
+        const val = m[2].trim();
+        const isConf = val.includes("/");
+        if (isConf) {
+          rows.push(`<tr><td class="tl">${label}</td><td><span class="conf-num">${esc(val)}</span></td></tr>`);
+        } else {
+          rows.push(`<tr><td class="tl">${label}</td><td>${threatBar(val)}</td></tr>`);
+        }
       }
-      if (/^§\d+/.test(line) || /^END OF/.test(line)) {
-        return `<div class="section-head">${line}</div>`;
+    }
+    return rows.length
+      ? `<table class="ptable"><tbody>${rows.join("")}</tbody></table>`
+      : renderTextBlock(slines);
+  }
+
+  /* ── §3 Data Summary — parse sub-sections into tables ─────────────────── */
+  function renderDataSummary(slines: string[]): string {
+    const chunks: Array<{ title: string; lines: string[] }> = [];
+    let chunkTitle = "";
+    let chunkLines: string[] = [];
+    for (const l of slines) {
+      if (l.startsWith("──")) {
+        if (chunkLines.some(x => x.trim())) chunks.push({ title: chunkTitle, lines: chunkLines });
+        chunkTitle = l.replace(/^──+/, "").replace(/──+$/, "").trim();
+        chunkLines = [];
+      } else {
+        chunkLines.push(l);
       }
-      if (line === div || line.startsWith("━━━")) {
-        return `<hr class="divider">`;
+    }
+    if (chunkLines.some(x => x.trim())) chunks.push({ title: chunkTitle, lines: chunkLines });
+
+    return chunks.map(({ title, lines }) => {
+      const rows = lines.filter(l => l.trim()).map(l => {
+        const m = l.match(/^(.*?):\s*(\S.*)$/);
+        if (!m) return `<tr><td colspan="2" class="mono-sm">${esc(l)}</td></tr>`;
+        return `<tr><td class="tl">${esc(m[1].trim())}</td><td class="mono-sm">${esc(m[2].trim())}</td></tr>`;
+      });
+      return `<div class="sub-section">
+        ${title ? `<div class="sub-title">${esc(title)}</div>` : ""}
+        <table class="dtable"><tbody>${rows.join("")}</tbody></table>
+      </div>`;
+    }).join("");
+  }
+
+  /* ── §4 Domain Pressure Chart — ASCII bars → HTML bars ─────────────────── */
+  function renderDomainChart(slines: string[]): string {
+    const items: Array<{ domain: string; band: string; count: string; pct: string }> = [];
+    for (const l of slines) {
+      if (!l.trim() || l.startsWith("Insufficient")) continue;
+      const m = l.match(/^(.{5,32?})\s+[█░]+\s+(CRITICAL|HIGH|ELEVATED|GUARDED|LOW)\s+(\d+)\s+signals?\s+(\d+)%/i);
+      if (m) items.push({ domain: m[1].trim(), band: m[2].trim(), count: m[3], pct: m[4] });
+    }
+    if (!items.length) return renderTextBlock(slines);
+    const bandColor: Record<string, string> = { CRITICAL: "#dc2626", HIGH: "#ea580c", ELEVATED: "#d97706", GUARDED: "#b45309", LOW: "#9ca3af" };
+    return `<table class="dtable"><thead><tr><th style="text-align:left">Domain</th><th>Signals</th><th style="width:200px">Distribution</th><th>Level</th></tr></thead><tbody>${
+      items.map(it => {
+        const color = bandColor[it.band] ?? "#9ca3af";
+        return `<tr>
+          <td class="tl">${esc(it.domain)}</td>
+          <td class="tc mono-sm">${esc(it.count)}</td>
+          <td><div class="tbar-track"><div class="tbar-fill" style="width:${it.pct}%;background:${color}"></div></div></td>
+          <td><span class="tbar-lbl" style="color:${color}">${esc(it.band)}</span></td>
+        </tr>`;
+      }).join("")
+    }</tbody></table>`;
+  }
+
+  /* ── §5 Primary Signals — parse into cards ─────────────────────────────── */
+  function renderSignalCards(slines: string[]): string {
+    const FIELDS = ["SIGNAL", "CONFIDENCE", "EVENT", "CONTEXT", "MECHANISM", "WHY IT MATTERS", "SYSTEM IMPACT", "PRESSURE STATE", "FORWARD OUTLOOK", "WATCHPOINT"];
+    const cards: Array<Record<string, string>> = [];
+    let cur: Record<string, string> = {};
+    let lastField = "";
+
+    for (const line of slines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith("─────") || trimmed.startsWith("━━━")) {
+        if (Object.keys(cur).length > 1) { cards.push(cur); cur = {}; lastField = ""; }
+        continue;
       }
-      if (line.startsWith("──")) {
-        return `<div class="sub-head">${line}</div>`;
+      const fieldMatch = FIELDS.find(f => line.startsWith(f + ":") || line.startsWith(f + " :"));
+      if (fieldMatch) {
+        const val = line.replace(new RegExp(`^${fieldMatch}\\s*:\\s*`), "").trim();
+        cur[fieldMatch] = val;
+        lastField = fieldMatch;
+      } else if (lastField && line.startsWith("  ")) {
+        cur[lastField] = (cur[lastField] || "") + " " + trimmed;
       }
-      if (line.startsWith("─────")) {
-        return `<hr class="sub-divider">`;
+    }
+    if (Object.keys(cur).length > 1) cards.push(cur);
+
+    if (!cards.length) return renderTextBlock(slines);
+
+    return cards.map((card, idx) => {
+      const sigLine = card["SIGNAL"] || "";
+      const confLine = card["CONFIDENCE"] || "";
+      const confMatch = confLine.match(/(\d+)\/100/);
+      const confNum = confMatch ? parseInt(confMatch[1]) : 0;
+      const confColor = confNum >= 88 ? "#16a34a" : confNum >= 78 ? "#0284c7" : confNum >= 68 ? "#d97706" : "#6b7280";
+      const sevMatch = confLine.match(/SEVERITY:\s*([■□]+)/);
+      const sevDots = sevMatch ? sevMatch[1].split("").map(c => `<span class="sev-dot${c === "■" ? " sev-on" : ""}">${c}</span>`).join("") : "";
+      const srcMatch = confLine.match(/SOURCE:\s*(.+)$/);
+      const src = srcMatch ? srcMatch[1] : "";
+      const tierMatch = sigLine.match(/TIER\s+(\d)\s*—\s*([^|]+)/i);
+      const tierLabel = tierMatch ? `T${tierMatch[1]} · ${tierMatch[2].trim()}` : "";
+      const isCorroborated = /CORROBORATED/i.test(sigLine);
+      const domainMatch = sigLine.match(/^([^|]+)/);
+      const domain = domainMatch ? domainMatch[1].trim() : "";
+
+      const fieldRow = (label: string, value: string) => value
+        ? `<div class="sig-row"><div class="sig-lbl">${label}</div><div class="sig-val">${esc(value)}</div></div>`
+        : "";
+
+      const pressLine = card["PRESSURE STATE"] || "";
+      const pressState = pressLine.split("|")[0].trim();
+      const pressVector = pressLine.includes("VECTOR:") ? pressLine.split("VECTOR:")[1].trim() : "";
+      const stateColor = pressState === "BUILDING" ? "#ea580c" : pressState === "TRANSFERRING" ? "#d97706" : pressState === "RELEASING" ? "#16a34a" : "#6b7280";
+
+      return `<div class="sig-card" style="page-break-inside:avoid;">
+        <div class="sig-header">
+          <div class="sig-domain">${esc(domain)}</div>
+          <div class="sig-meta-badges">
+            ${tierLabel ? `<span class="sig-badge">${esc(tierLabel)}</span>` : ""}
+            ${isCorroborated ? `<span class="sig-badge corr">◆ CORROBORATED</span>` : ""}
+            <span class="sig-badge" style="color:${confColor};border-color:${confColor}60">${confNum}/100 confidence</span>
+            <span class="sig-sev">${sevDots}</span>
+            ${src ? `<span class="sig-src">${esc(src)}</span>` : ""}
+          </div>
+        </div>
+        <div class="sig-event">${esc(card["EVENT"] || "")}</div>
+        <div class="sig-body">
+          ${fieldRow("Context", card["CONTEXT"] || "")}
+          ${fieldRow("Mechanism", card["MECHANISM"] || "")}
+          ${fieldRow("Why It Matters", card["WHY IT MATTERS"] || "")}
+          ${fieldRow("System Impact", card["SYSTEM IMPACT"] || "")}
+          ${pressState ? `<div class="sig-row"><div class="sig-lbl">Pressure</div><div class="sig-val"><span style="color:${stateColor};font-weight:600">${esc(pressState)}</span>${pressVector ? ` &rarr; ${esc(pressVector)}` : ""}</div></div>` : ""}
+          ${fieldRow("Forward Outlook", card["FORWARD OUTLOOK"] || "")}
+          ${fieldRow("Watchpoint", card["WATCHPOINT"] || "")}
+        </div>
+        <div class="sig-num">${idx + 1}</div>
+      </div>`;
+    }).join("\n");
+  }
+
+  /* ── §6 Signal Matrix — confidence tier groups ──────────────────────────── */
+  function renderSignalMatrix(slines: string[]): string {
+    const groups: Array<{ title: string; items: string[] }> = [];
+    let cur: { title: string; items: string[] } | null = null;
+    for (const l of slines) {
+      if (!l.trim()) continue;
+      if (/^(CONFIRMED|LIKELY|CONTESTED)/i.test(l.trim())) {
+        if (cur) groups.push(cur);
+        cur = { title: l.trim(), items: [] };
+      } else if (l.startsWith("  [") && cur) {
+        cur.items.push(l.trim());
+      } else if (l.startsWith("◆") && cur) {
+        cur.items.push(l.trim()); // legend line
       }
-      if (line.trim() === "") {
-        return `<div class="spacer"></div>`;
+    }
+    if (cur) groups.push(cur);
+    if (!groups.length) return renderTextBlock(slines);
+
+    return groups.map(g => {
+      if (!g.items.length) return `<div class="matrix-group"><div class="matrix-tier">${esc(g.title)}</div><div class="matrix-empty">None at this tier.</div></div>`;
+      const isLegend = g.items.some(i => i.startsWith("◆"));
+      if (isLegend) {
+        return `<div class="matrix-legend">${g.items.map(i => `<span>${esc(i)}</span>`).join("  ")}</div>`;
       }
-      return `<div class="line">${line}</div>`;
-    })
-    .join("\n");
+      const confColor = /CONFIRMED/i.test(g.title) ? "#16a34a" : /LIKELY/i.test(g.title) ? "#0284c7" : "#6b7280";
+      const rows = g.items.map(item => {
+        const m = item.match(/^\[(.+?)\]\s*\[(.+?)\]\s*(.+?)\s*—\s*(\d+)\/100$/);
+        if (!m) return `<tr><td colspan="4" class="mono-sm">${esc(item)}</td></tr>`;
+        return `<tr><td class="tl mono-sm">${esc(m[1])}</td><td class="mono-sm" style="white-space:nowrap">${esc(m[2])}</td><td>${esc(m[3])}</td><td class="tc mono-sm" style="color:${confColor}">${esc(m[4])}%</td></tr>`;
+      });
+      return `<div class="matrix-group" style="page-break-inside:avoid">
+        <div class="matrix-tier" style="color:${confColor}">${esc(g.title)}</div>
+        <table class="dtable"><thead><tr><th>Domain</th><th>Tier</th><th>Event</th><th>Conf.</th></tr></thead><tbody>${rows.join("")}</tbody></table>
+      </div>`;
+    }).join("\n");
+  }
+
+  /* ── §9 Pressure Map + Vector Table ────────────────────────────────────── */
+  function renderPressureMap(slines: string[]): string {
+    const lists: string[] = [];
+    const tableRows: string[] = [];
+    let inTable = false;
+    let currentListTitle = "";
+    let currentListItems: string[] = [];
+    const bandColor: Record<string, string> = { HIGH: "#dc2626", ELEVATED: "#ea580c", MODERATE: "#d97706", FRAGMENTED: "#6b7280" };
+
+    const flushList = () => {
+      if (currentListTitle || currentListItems.length) {
+        lists.push(`<div class="pmap-group"><div class="pmap-title">${esc(currentListTitle)}</div>${
+          currentListItems.length
+            ? `<ul class="pmap-list">${currentListItems.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`
+            : `<div class="pmap-none">None confirmed.</div>`
+        }</div>`);
+        currentListTitle = ""; currentListItems = [];
+      }
+    };
+
+    for (const l of slines) {
+      const t = l.trim();
+      if (!t) continue;
+      if (/^PRESSURE\s+(BUILDING|TRANSFERRING|RELEASING)/i.test(t)) {
+        flushList();
+        inTable = false;
+        currentListTitle = t.replace(/:$/, "");
+      } else if (/^PRESSURE VECTOR TABLE/i.test(t)) {
+        flushList();
+        inTable = true;
+      } else if (inTable) {
+        // parse vector table rows: "Source Domain  →  Target Domain  INTENSITY  N signals"
+        const m = t.match(/^(.+?)\s+→\s+(.+?)\s+(HIGH|ELEVATED|MODERATE|FRAGMENTED)\s+(\d+)\s+signal/i);
+        if (m) {
+          const color = bandColor[m[3].toUpperCase()] ?? "#6b7280";
+          tableRows.push(`<tr><td class="tl">${esc(m[1].trim())}</td><td class="tc">→</td><td class="tl">${esc(m[2].trim())}</td><td><span style="color:${color};font-weight:600">${esc(m[3])}</span></td><td class="tc mono-sm">${esc(m[4])}</td></tr>`);
+        }
+      } else if (t.startsWith("•")) {
+        currentListItems.push(t.replace(/^•\s*/, ""));
+      }
+    }
+    flushList();
+
+    const tableHtml = tableRows.length
+      ? `<div class="sub-section"><div class="sub-title">PRESSURE VECTOR TABLE</div><table class="dtable"><thead><tr><th>Source Domain</th><th></th><th>Target Domain</th><th>Intensity</th><th>Signals</th></tr></thead><tbody>${tableRows.join("")}</tbody></table></div>`
+      : "";
+
+    return lists.join("\n") + tableHtml;
+  }
+
+  /* ── §13 Watchpoints — bullet list ─────────────────────────────────────── */
+  function renderWatchpoints(slines: string[]): string {
+    const items = slines.filter(l => l.trim().startsWith("•")).map(l => `<li>${esc(l.trim().replace(/^•\s*/, ""))}</li>`);
+    return items.length ? `<ul class="watch-list">${items.join("")}</ul>` : renderTextBlock(slines);
+  }
+
+  /* ── §14 Appendix — grouped list ───────────────────────────────────────── */
+  function renderAppendix(slines: string[]): string {
+    const groups: Array<{ title: string; items: string[] }> = [];
+    let cur: { title: string; items: string[] } | null = null;
+    for (const l of slines) {
+      if (!l.trim()) continue;
+      if (/^\s{0,2}[A-Z]/.test(l) && !l.trim().startsWith("[")) {
+        if (cur) groups.push(cur);
+        cur = { title: l.trim(), items: [] };
+      } else if (l.trim().startsWith("[") && cur) {
+        cur.items.push(l.trim());
+      }
+    }
+    if (cur) groups.push(cur);
+    if (!groups.length) return renderTextBlock(slines);
+
+    return groups.map(g => {
+      return `<div class="app-group" style="page-break-inside:avoid">
+        <div class="app-title">${esc(g.title)}</div>
+        ${g.items.map(i => {
+          const m = i.match(/^\[(\d+)%\]\[(.+?)\]\s*(.+)$/);
+          if (!m) return `<div class="app-item"><span class="mono-sm">${esc(i)}</span></div>`;
+          return `<div class="app-item"><span class="app-conf mono-sm">${esc(m[1])}%</span><span class="app-tier mono-sm">${esc(m[2])}</span><span>${esc(m[3])}</span></div>`;
+        }).join("")}
+      </div>`;
+    }).join("");
+  }
+
+  /* ── Generic text block renderer ───────────────────────────────────────── */
+  function renderTextBlock(slines: string[]): string {
+    const paras: string[] = [];
+    let buf: string[] = [];
+    for (const l of slines) {
+      if (!l.trim()) {
+        if (buf.length) { paras.push(`<p>${esc(buf.join(" "))}</p>`); buf = []; }
+      } else if (/^(CONTINUATION PATH|ESCALATION PATH|STABILIZATION PATH|FAILURE PATH|CONFLICT MECHANICS|MARKET MECHANICS|INFRASTRUCTURE MECHANICS|POLICY MECHANICS|SECURITY × |ECONOMIC × |POLICY × |TECHNOLOGY × )/.test(l.trim())) {
+        if (buf.length) { paras.push(`<p>${esc(buf.join(" "))}</p>`); buf = []; }
+        const split = l.indexOf(":");
+        if (split > 0) {
+          paras.push(`<div class="named-block"><span class="named-label">${esc(l.slice(0, split))}</span><span>${esc(l.slice(split + 1).trim())}</span></div>`);
+        } else {
+          paras.push(`<p class="named-label">${esc(l)}</p>`);
+        }
+      } else if (l.trim().startsWith("•")) {
+        if (buf.length) { paras.push(`<p>${esc(buf.join(" "))}</p>`); buf = []; }
+        paras.push(`<div class="bullet">${esc(l.trim())}</div>`);
+      } else {
+        buf.push(l.trim());
+      }
+    }
+    if (buf.length) paras.push(`<p>${esc(buf.join(" "))}</p>`);
+    return paras.join("\n") || `<p class="dim">No content available for this section.</p>`;
+  }
+
+  /* ── Section dispatch ───────────────────────────────────────────────────── */
+  function renderSection(key: string): string {
+    const slines = sections[key] || [];
+    switch (key) {
+      case "§2": return renderThreatPosture(slines);
+      case "§3": return renderDataSummary(slines);
+      case "§4": return renderDomainChart(slines);
+      case "§5": return renderSignalCards(slines);
+      case "§6": return renderSignalMatrix(slines);
+      case "§9": return renderPressureMap(slines);
+      case "§13": return renderWatchpoints(slines);
+      case "§14": return renderAppendix(slines);
+      default: return renderTextBlock(slines);
+    }
+  }
+
+  /* ── Section title map ──────────────────────────────────────────────────── */
+  const SECTION_TITLES: Record<string, string> = {
+    "§1": "Executive Overview", "§2": "Threat Posture Summary",
+    "§3": "Data Summary", "§4": "Domain Pressure Chart",
+    "§5": "Primary Signals", "§6": "Signal Matrix by Confidence",
+    "§7": "System Mechanics", "§8": "System Intersection",
+    "§9": "Pressure Map &amp; Vector Table", "§10": "Constraints",
+    "§11": "Forward Projection", "§12": "Operator Takeaway",
+    "§13": "Watchpoints", "§14": "Appendix",
+  };
+
+  /* ── Overall threat for cover badge ─────────────────────────────────────── */
+  const s2Lines = sections["§2"] || [];
+  let overallThreat = "GUARDED";
+  for (const l of s2Lines) {
+    const m = l.match(/^Overall Threat Posture:\s*(CRITICAL|HIGH|ELEVATED|GUARDED|LOW)/i);
+    if (m) { overallThreat = m[1].toUpperCase(); break; }
+  }
+  const threatColors: Record<string, [string, string]> = {
+    CRITICAL: ["#dc2626", "#fef2f2"], HIGH: ["#ea580c", "#fff7ed"],
+    ELEVATED: ["#d97706", "#fffbeb"], GUARDED: ["#b45309", "#fefce8"], LOW: ["#6b7280", "#f9fafb"],
+  };
+  const [threatFg, threatBg] = threatColors[overallThreat] ?? threatColors["GUARDED"];
+
+  /* ── Build document sections HTML ───────────────────────────────────────── */
+  const sectionKeys = Object.keys(sections).filter(k => k.startsWith("§")).sort();
+  const sectionsHtml = sectionKeys.map(key => {
+    const num = key.replace("§", "");
+    const title = SECTION_TITLES[key] || key;
+    const content = renderSection(key);
+    const breakBefore = ["§5", "§7", "§9", "§11", "§14"].includes(key) ? 'style="page-break-before:auto"' : "";
+    return `<section class="doc-section" ${breakBefore}>
+      <div class="sec-head">
+        <span class="sec-num">${esc(num)}</span>
+        <span class="sec-title">${title}</span>
+      </div>
+      <div class="sec-body">${content}</div>
+    </section>`;
+  }).join("\n");
+
+  /* ── Cover page ─────────────────────────────────────────────────────────── */
+  const coverHtml = `<div class="cover">
+    <div class="cover-top">
+      <div class="cover-org">OFFICE OF EXECUTIVE INTELLIGENCE</div>
+      <div class="cover-brand">RSR <span class="cover-axion">AXION</span></div>
+      <div class="cover-sub">Intelligence Synthesis System</div>
+    </div>
+    <div class="cover-divider"></div>
+    <div class="cover-title">${esc(briefTitle)}</div>
+    <div class="cover-divider"></div>
+    <div class="cover-meta">
+      ${metaDate ? `<div class="cover-meta-row"><span class="cover-meta-lbl">DATE</span><span>${metaDate}</span></div>` : ""}
+      ${metaTime ? `<div class="cover-meta-row"><span class="cover-meta-lbl">TIME</span><span>${metaTime}</span></div>` : ""}
+      ${metaLoc ? `<div class="cover-meta-row"><span class="cover-meta-lbl">LOCATION</span><span>${metaLoc}</span></div>` : ""}
+      ${metaCycle ? `<div class="cover-meta-row"><span class="cover-meta-lbl">CYCLE</span><span>${metaCycle}</span></div>` : ""}
+      ${metaSignals ? `<div class="cover-meta-row"><span class="cover-meta-lbl">SIGNALS</span><span>${metaSignals}</span></div>` : ""}
+      ${metaConf ? `<div class="cover-meta-row"><span class="cover-meta-lbl">CONFIDENCE</span><span>${metaConf}</span></div>` : ""}
+      ${metaCorroboration ? `<div class="cover-meta-row"><span class="cover-meta-lbl">CORROBORATED</span><span>${metaCorroboration}</span></div>` : ""}
+      ${metaPipeline ? `<div class="cover-meta-row"><span class="cover-meta-lbl">PIPELINE</span><span class="mono-sm">${metaPipeline}</span></div>` : ""}
+    </div>
+    <div class="cover-threat" style="background:${threatBg};border-color:${threatFg}">
+      <div class="cover-threat-lbl">THREAT POSTURE</div>
+      <div class="cover-threat-val" style="color:${threatFg}">${esc(overallThreat)}</div>
+    </div>
+    <div class="cover-footer">UNCLASSIFIED · RSR AXION · INTELLIGENCE SYNTHESIS SYSTEM</div>
+  </div>`;
+
+  /* ── CSS ────────────────────────────────────────────────────────────────── */
+  const css = `
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #fff; color: #0a0a0a; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 10pt; line-height: 1.65; }
+    body { padding: 0; }
+
+    /* Cover */
+    .cover { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 40px; text-align: center; page-break-after: always; border-bottom: 2px solid #0a0a0a; }
+    .cover-top { margin-bottom: 24px; }
+    .cover-org { font-size: 8pt; letter-spacing: .18em; color: #6b7280; text-transform: uppercase; margin-bottom: 12px; }
+    .cover-brand { font-family: 'Orbitron', sans-serif; font-size: 36pt; font-weight: 900; letter-spacing: .08em; color: #0a0a0a; line-height: 1; }
+    .cover-axion { color: #1d4ed8; }
+    .cover-sub { font-size: 9pt; letter-spacing: .14em; color: #6b7280; text-transform: uppercase; margin-top: 6px; }
+    .cover-divider { width: 100%; max-width: 480px; border-top: 1px solid #d1d5db; margin: 24px auto; }
+    .cover-title { font-family: 'Orbitron', sans-serif; font-size: 13pt; font-weight: 700; letter-spacing: .10em; text-transform: uppercase; color: #111; margin-bottom: 8px; }
+    .cover-meta { margin: 24px 0; text-align: left; max-width: 420px; width: 100%; }
+    .cover-meta-row { display: flex; gap: 16px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 9pt; }
+    .cover-meta-lbl { width: 110px; flex-shrink: 0; font-size: 7.5pt; letter-spacing: .12em; text-transform: uppercase; color: #6b7280; padding-top: 1px; }
+    .cover-threat { margin-top: 28px; padding: 20px 40px; border: 1.5px solid; border-radius: 4px; text-align: center; }
+    .cover-threat-lbl { font-size: 7.5pt; letter-spacing: .16em; text-transform: uppercase; color: #6b7280; margin-bottom: 6px; }
+    .cover-threat-val { font-family: 'Orbitron', sans-serif; font-size: 22pt; font-weight: 900; letter-spacing: .10em; }
+    .cover-footer { position: fixed; bottom: 20px; font-size: 7pt; letter-spacing: .10em; color: #9ca3af; text-transform: uppercase; }
+
+    /* Sections */
+    .doc-section { padding: 28px 32px; border-bottom: 1px solid #e5e7eb; }
+    .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1.5px solid #0a0a0a; page-break-after: avoid; }
+    .sec-num { font-family: 'Orbitron', sans-serif; font-size: 8pt; font-weight: 700; color: #6b7280; background: #f3f4f6; padding: 3px 8px; border-radius: 3px; letter-spacing: .06em; flex-shrink: 0; }
+    .sec-title { font-family: 'Orbitron', sans-serif; font-size: 11pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #0a0a0a; }
+    .sec-body { font-size: 9.5pt; line-height: 1.7; }
+    .sec-body p { margin-bottom: 10px; color: #1f2937; }
+    .sec-body p:last-child { margin-bottom: 0; }
+
+    /* Named blocks (Forward Projection, Mechanics labels) */
+    .named-block { display: flex; gap: 10px; margin-bottom: 12px; padding: 10px 14px; background: #f9fafb; border-left: 3px solid #d1d5db; border-radius: 0 4px 4px 0; page-break-inside: avoid; }
+    .named-label { font-size: 7.5pt; font-weight: 700; letter-spacing: .10em; text-transform: uppercase; color: #6b7280; white-space: nowrap; min-width: 120px; padding-top: 1px; }
+    .bullet { padding: 3px 0 3px 16px; color: #374151; border-left: 2px solid #e5e7eb; margin-bottom: 6px; margin-left: 4px; }
+
+    /* Threat bar */
+    .tbar { display: flex; align-items: center; gap: 10px; padding: 2px 0; }
+    .tbar-track { flex: 1; height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
+    .tbar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+    .tbar-lbl { font-size: 8.5pt; font-weight: 700; letter-spacing: .06em; min-width: 72px; }
+    .ptable { width: 100%; border-collapse: collapse; }
+    .ptable td { padding: 7px 12px 7px 0; vertical-align: middle; font-size: 9pt; }
+    .ptable td.tl { width: 220px; color: #6b7280; font-size: 8pt; letter-spacing: .04em; text-transform: uppercase; }
+    .conf-num { font-family: 'IBM Plex Mono', monospace; font-size: 11pt; font-weight: 600; color: #1d4ed8; }
+
+    /* Data tables */
+    .dtable { width: 100%; border-collapse: collapse; font-size: 8.5pt; margin-bottom: 4px; }
+    .dtable th { background: #f3f4f6; color: #6b7280; font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; font-weight: 600; padding: 7px 10px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    .dtable td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
+    .dtable tr:last-child td { border-bottom: none; }
+    .dtable td.tl { color: #374151; font-size: 8.5pt; }
+    .dtable td.tc { text-align: center; }
+    .dtable tr:hover td { background: #f9fafb; }
+    .sub-section { margin-bottom: 20px; }
+    .sub-title { font-size: 7.5pt; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #6b7280; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+    .mono-sm { font-family: 'IBM Plex Mono', monospace; font-size: 8pt; }
+
+    /* Confidence badges */
+    .cbadge { font-size: 7pt; font-weight: 700; padding: 2px 7px; border-radius: 3px; letter-spacing: .06em; }
+
+    /* Signal cards */
+    .sig-card { border: 1px solid #e5e7eb; border-radius: 6px; margin-bottom: 20px; overflow: hidden; position: relative; }
+    .sig-header { background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 10px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .sig-domain { font-family: 'Orbitron', sans-serif; font-size: 8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #1d4ed8; }
+    .sig-meta-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .sig-badge { font-size: 7pt; font-weight: 600; letter-spacing: .06em; padding: 2px 7px; border: 1px solid #d1d5db; border-radius: 3px; color: #6b7280; }
+    .sig-badge.corr { color: #0284c7; border-color: #0284c760; background: #e0f2fe40; }
+    .sig-src { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; color: #9ca3af; }
+    .sig-sev { letter-spacing: 2px; font-size: 8pt; }
+    .sev-dot { color: #d1d5db; }
+    .sev-dot.sev-on { color: #0a0a0a; }
+    .sig-event { padding: 10px 14px 8px; font-weight: 600; font-size: 10pt; color: #0a0a0a; border-bottom: 1px solid #f3f4f6; line-height: 1.4; }
+    .sig-body { padding: 8px 14px 12px; display: flex; flex-direction: column; gap: 6px; }
+    .sig-row { display: flex; gap: 10px; font-size: 8.5pt; }
+    .sig-lbl { font-size: 7pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; min-width: 100px; padding-top: 2px; flex-shrink: 0; }
+    .sig-val { color: #374151; line-height: 1.55; flex: 1; }
+    .sig-num { position: absolute; top: 10px; right: 14px; font-family: 'Orbitron', sans-serif; font-size: 18pt; font-weight: 900; color: #f3f4f6; line-height: 1; }
+
+    /* Signal matrix */
+    .matrix-group { margin-bottom: 18px; page-break-inside: avoid; }
+    .matrix-tier { font-weight: 700; font-size: 9pt; letter-spacing: .06em; margin-bottom: 6px; text-transform: uppercase; }
+    .matrix-empty { color: #9ca3af; font-size: 8.5pt; padding-left: 8px; }
+    .matrix-legend { font-size: 7.5pt; color: #6b7280; margin-top: 8px; }
+
+    /* Pressure map */
+    .pmap-group { margin-bottom: 14px; page-break-inside: avoid; }
+    .pmap-title { font-weight: 700; font-size: 8.5pt; letter-spacing: .08em; text-transform: uppercase; color: #374151; margin-bottom: 6px; }
+    .pmap-list { list-style: none; padding-left: 8px; }
+    .pmap-list li { padding: 3px 0; font-size: 8.5pt; border-left: 2px solid #e5e7eb; padding-left: 10px; margin-bottom: 4px; }
+    .pmap-none { color: #9ca3af; font-size: 8.5pt; padding-left: 10px; }
+
+    /* Watchpoints */
+    .watch-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+    .watch-list li { padding: 9px 14px; background: #f9fafb; border-left: 3px solid #d1d5db; font-size: 9pt; line-height: 1.55; }
+
+    /* Appendix */
+    .app-group { margin-bottom: 18px; }
+    .app-title { font-family: 'Orbitron', sans-serif; font-size: 8.5pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #374151; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #e5e7eb; }
+    .app-item { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; font-size: 8.5pt; border-bottom: 1px solid #f9fafb; }
+    .app-conf { color: #1d4ed8; min-width: 38px; }
+    .app-tier { color: #6b7280; min-width: 60px; }
+    .dim { color: #9ca3af; font-style: italic; }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .cover { min-height: unset; padding: 36px 30px; }
+      .cover-footer { position: static; margin-top: 32px; }
+      .doc-section { padding: 20px 24px; }
+      .sig-card { break-inside: avoid; }
+      .matrix-group { break-inside: avoid; }
+      .app-group { break-inside: avoid; }
+    }
+  `;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RSR AXION Intelligence Brief</title>
+<title>RSR AXION — ${esc(briefTitle)}</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { background: #fff; color: #111; font-family: 'IBM Plex Mono', monospace; font-size: 9.5pt; line-height: 1.55; }
-  body { padding: 28mm 22mm 24mm 22mm; }
-  .doc-title { font-family: 'Orbitron', sans-serif; font-size: 11pt; font-weight: 700; letter-spacing: .12em; margin-bottom: 4px; color: #0a0a0a; }
-  .section-head { font-family: 'Orbitron', sans-serif; font-size: 9pt; font-weight: 700; letter-spacing: .10em; color: #1a1a2a; margin: 12px 0 4px; page-break-after: avoid; }
-  .sub-head { font-weight: 600; color: #222; margin: 8px 0 2px; font-size: 8.5pt; }
-  hr.divider { border: none; border-top: 1.5px solid #111; margin: 6px 0; }
-  hr.sub-divider { border: none; border-top: 0.5px solid #888; margin: 4px 0; }
-  .line { white-space: pre-wrap; word-break: break-word; }
-  .spacer { height: 6px; }
-  @media print {
-    body { padding: 18mm 16mm 16mm 16mm; font-size: 8.5pt; }
-    .section-head { page-break-before: auto; }
-    a { text-decoration: none; color: inherit; }
-  }
-</style>
-<script>window.addEventListener('load', () => { setTimeout(() => window.print(), 350); });<\/script>
+<style>${css}</style>
+<script>window.addEventListener('load',()=>{setTimeout(()=>window.print(),600);})<\/script>
 </head>
 <body>
-${formatted}
+${coverHtml}
+${sectionsHtml}
 </body>
 </html>`;
 }
