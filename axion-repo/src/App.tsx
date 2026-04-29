@@ -100,6 +100,9 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://foreignpolicy.com/feed/",                                          domain: "Global Affairs" },
   { url: "https://www.theguardian.com/world/rss",                                    domain: "Global Affairs" },
   { url: "https://www.cfr.org/rss.xml",                                              domain: "Global Affairs" },
+  { url: "https://news.un.org/feed/subscribe/en/news/all/rss.xml",                  domain: "Global Affairs" },
+  { url: "https://www.reuters.com/rssFeed/worldNews",                                domain: "Global Affairs" },
+  { url: "https://rss.politico.com/congress.xml",                                   domain: "Global Affairs" },
   // ── Security / Defense ──
   { url: "https://warontherocks.com/feed/",                                          domain: "Security / Defense" },
   { url: "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml",        domain: "Security / Defense" },
@@ -110,7 +113,9 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://www.understandingwar.org/feed",                                    domain: "Security / Defense" },
   { url: "https://taskandpurpose.com/feed/",                                         domain: "Security / Defense" },
   { url: "https://rss.nytimes.com/services/xml/rss/nyt/MiddleEast.xml",             domain: "Security / Defense" },
-  { url: "https://feeds.apnews.com/rss/apf-usnews",                                  domain: "Security / Defense" },
+  { url: "https://feeds.apnews.com/rss/apf-usnews",                                 domain: "Security / Defense" },
+  { url: "https://spaceflight.nasa.gov/cgi-bin/rss.cgi",                            domain: "Security / Defense" },
+  { url: "https://www.janes.com/feeds/news",                                         domain: "Security / Defense" },
   // ── Cyber / Signals ──
   { url: "https://krebsonsecurity.com/feed/",                                        domain: "Cyber / Signals" },
   { url: "https://www.bleepingcomputer.com/feed/",                                   domain: "Cyber / Signals" },
@@ -121,6 +126,9 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://feeds.arstechnica.com/arstechnica/security",                       domain: "Cyber / Signals" },
   { url: "https://www.zdnet.com/topic/security/rss.xml",                             domain: "Cyber / Signals" },
   { url: "https://www.wired.com/feed/category/security/latest/rss",                  domain: "Cyber / Signals" },
+  { url: "https://thehackernews.com/feeds/posts/default",                            domain: "Cyber / Signals" },
+  { url: "https://isc.sans.edu/rssfeed.xml",                                         domain: "Cyber / Signals" },
+  { url: "https://www.cisa.gov/uscert/ncas/alerts.xml",                              domain: "Cyber / Signals" },
   // ── AI / Compute ──
   { url: "https://techcrunch.com/category/artificial-intelligence/feed/",            domain: "AI / Compute" },
   { url: "https://www.technologyreview.com/feed/",                                   domain: "AI / Compute" },
@@ -134,6 +142,8 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",              domain: "Markets / Economy" },
   { url: "https://feeds.apnews.com/rss/apf-business",                                domain: "Markets / Economy" },
   { url: "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml",                domain: "Markets / Economy" },
+  { url: "https://www.federalreserve.gov/feeds/press_all.xml",                       domain: "Markets / Economy" },
+  { url: "https://feeds.bloomberg.com/markets/news.rss",                             domain: "Markets / Economy" },
   // ── Energy ──
   { url: "https://oilprice.com/rss/main",                                            domain: "Energy" },
   { url: "https://www.eia.gov/rss/press_rss.xml",                                    domain: "Energy" },
@@ -153,6 +163,8 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://www.axios.com/feeds/feed.rss",                                     domain: "Policy / Regulation" },
   { url: "https://feeds.apnews.com/rss/apf-politics",                                domain: "Policy / Regulation" },
   { url: "https://www.federalregister.gov/articles/search.rss",                      domain: "Policy / Regulation" },
+  { url: "https://www.ftc.gov/feeds/press-releases.xml",                             domain: "Policy / Regulation" },
+  { url: "https://www.justice.gov/feeds/news/press-releases.xml",                   domain: "Policy / Regulation" },
   // ── Public Health / Biosecurity ──
   { url: "https://www.who.int/rss-feeds/news-english.xml",                           domain: "Public Health / Biosecurity" },
   { url: "https://www.statnews.com/feed/",                                           domain: "Public Health / Biosecurity" },
@@ -168,31 +180,41 @@ const BROWSER_FEEDS: ReadonlyArray<{ url: string; domain: string }> = [
   { url: "https://feeds.bbci.co.uk/news/technology/rss.xml",                         domain: "Information Warfare" },
 ];
 
-/* ── Signal Relevance Filter — with rejection reason codes ──────────────── */
+/* ── Signal Relevance Filter — tier-aware with rejection reason codes ───── */
 
-const HARD_EXCLUDE_RE = /\b(sports|baseball|soccer|basketball|football|tennis|golf|olympics|nfl|nba|mlb|nhl|fifa|world.?cup|super.?bowl|playoffs|championship.?game|box.?office|oscar|grammy|emmy|album.?release|concert.?tour|sitcom|reality.?show|streaming.?show|fashion.?week|runway|couture|beauty.?tips|makeup|skincare|hair.?care|food.?recipe|restaurant.?review|chef|cooking.?show|travel.?tips|vacation.?resort|cruise.?ship|hotel.?deal|lifestyle.?blog|wellness.?tips|yoga.?class|weight.?loss|diet.?plan|horoscope|astrology|celebrity.?gossip|red.?carpet|dating.?tips|entertainment.?news|movie.?review|film.?review|video.?game.?review|k-pop|pop.?star|influencer|nfl.?draft|march.?madness|fantasy.?football|box.?office|awards.?show)\b/i;
+const HARD_EXCLUDE_RE = /\b(sports|baseball|soccer|basketball|football|tennis|golf|olympics|nfl|nba|mlb|nhl|fifa|world.?cup|super.?bowl|playoffs|championship.?game|box.?office|oscar|grammy|emmy|album.?release|concert.?tour|sitcom|reality.?show|streaming.?show|fashion.?week|runway|couture|beauty.?tips|makeup|skincare|hair.?care|food.?recipe|restaurant.?review|chef|cooking.?show|travel.?tips|vacation.?resort|cruise.?ship|hotel.?deal|lifestyle.?blog|wellness.?tips|yoga.?class|weight.?loss|diet.?plan|horoscope|astrology|celebrity.?gossip|red.?carpet|dating.?tips|entertainment.?news|movie.?review|film.?review|video.?game.?review|k-pop|pop.?star|influencer|nfl.?draft|march.?madness|fantasy.?football|awards.?show)\b/i;
 
-const SPORTS_RE = /\b(nfl|nba|mlb|nhl|fifa|espn|sports|athlete|player|coach|team|game|score|touchdown|home.?run|goal|slam.?dunk|league|tournament|championship|playoff|standings)\b/i;
+const SPORTS_RE = /\b(nfl|nba|mlb|nhl|fifa|espn|sports scores|athlete|touchdown|home.?run|slam.?dunk|playoff.?standings|box.?score|super.?bowl)\b/i;
 
-const ENTERTAINMENT_RE = /\b(celebrity|oscar|grammy|emmy|album|concert|tour|sitcom|streaming.?show|reality.?tv|fashion|runway|makeup|skincare|yoga|weight.?loss|diet|horoscope|astrology|red.?carpet|dating|influencer|k.?pop|pop.?star|box.?office)\b/i;
+const ENTERTAINMENT_RE = /\b(celebrity gossip|oscar|grammy|emmy|album release|concert tour|sitcom|reality.?tv|fashion week|runway|skincare routine|yoga class|weight.?loss tip|horoscope|astrology|red.?carpet|dating tips|k.?pop|pop.?star|influencer)\b/i;
 
-const LIFESTYLE_RE = /\b(recipe|restaurant|chef|cooking|travel.?tips|vacation|resort|cruise|hotel.?deal|wellness|lifestyle|beauty|hair.?care|food.?blog|home.?decor|interior.?design|gardening)\b/i;
+const LIFESTYLE_RE = /\b(food recipe|restaurant review|cooking show|travel tips|vacation resort|hotel deal|wellness tips|hair.?care tip|home.?decor|interior design|gardening tip)\b/i;
 
-const STRATEGIC_SIGNALS_RE = /\b(military|defense|security|war|conflict|attack|missile|nato|nuclear|sanction|tariff|trade|market|oil|gas|energy|inflation|central.?bank|interest.?rate|geopolit|strategic|intelligence|infrastructure|cyber|ransomware|hack|malware|government|policy|legislation|regulation|congress|senate|parliament|president|minister|treasury|crisis|emergency|diplomatic|summit|treaty|alliance|espionage|surveillance|supply.?chain|shipping|logistics|freight|port|semiconductor|chip|ai\b|artificial.?intelligence|compute|data.?center|satellite|space|drone|carrier|submarine|warship|troops|battalion|brigade|invasion|protest|unrest|coup|pandemic|outbreak|biosecurity|public.?health|who\b|cdc\b|imf\b|world.?bank|opec|federal.?reserve|executive.?order|agency|ruling|court|lawsuit|indictment|breach|exploit|vulnerability)\b/i;
+const STRATEGIC_SIGNALS_RE = /\b(military|defense|security|war|conflict|attack|missile|nato|nuclear|sanction|tariff|trade|market|oil|gas|energy|inflation|central.?bank|interest.?rate|geopolit|strategic|intelligence|infrastructure|cyber|ransomware|hack|malware|government|policy|legislation|regulation|congress|senate|parliament|president|minister|treasury|crisis|emergency|diplomatic|summit|treaty|alliance|espionage|surveillance|supply.?chain|shipping|logistics|freight|port|semiconductor|chip|artificial.?intelligence|\bai\b|compute|data.?center|satellite|space|drone|carrier|submarine|warship|troops|battalion|brigade|invasion|protest|unrest|coup|pandemic|outbreak|biosecurity|public.?health|federal.?reserve|executive.?order|agency|ruling|court|lawsuit|indictment|breach|exploit|vulnerability|advisory|budget|spending|debt|deficit|export|import|currency|federal|bureau|department|commission|authority|minister|ministry|election|referendum|accord|ceasefire|strike|shutdown|sanction|embargo|acquisition|merger|antitrust|regulation|climate|emissions|grid|pipeline|port|border|corridor|alliance|partnership|agreement|deal|contract|procurement|deployment|exercise|readiness)\b/i;
 
-function checkRelevance(title: string, summary: string = ""): { pass: boolean; reason?: RejectionReason } {
+// Broad institutional signals — used for Tier 1/2 leniency
+const INSTITUTIONAL_BROAD_RE = /\b(national|international|government|federal|state|agency|official|military|economic|financial|industrial|strategic|diplomatic|congressional|presidential|ministerial|parliamentary|regulatory|judicial|legislative|executive|institutional|infrastructure|security|defense|intelligence|policy|department|bureau|ministry|commission|authority|administration|operation|mission|program|initiative|report|review|assessment|warning|alert|advisory|announcement|statement|directive|order|law|act|bill|budget|spending|regulation|compliance)\b/i;
+
+function checkRelevance(title: string, summary: string = "", sourceTier?: 1 | 2 | 3 | 4): { pass: boolean; reason?: RejectionReason } {
   const text = `${title} ${summary}`;
 
-  if (!title.trim() || title.trim().length < 12) return { pass: false, reason: "EMPTY_SUMMARY" };
+  if (!title.trim() || title.trim().length < 10) return { pass: false, reason: "EMPTY_SUMMARY" };
 
+  // Hard noise exclusion — always applied regardless of tier
   if (SPORTS_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "SPORTS_NOISE" };
   if (ENTERTAINMENT_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "ENTERTAINMENT_NOISE" };
   if (LIFESTYLE_RE.test(title) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "LIFESTYLE_NOISE" };
-
   if (HARD_EXCLUDE_RE.test(text) && !STRATEGIC_SIGNALS_RE.test(title)) return { pass: false, reason: "ENTERTAINMENT_NOISE" };
 
+  // Tier 1/2 sources: accept with broad institutional/systemic relevance
+  if ((sourceTier === 1 || sourceTier === 2) && INSTITUTIONAL_BROAD_RE.test(text)) return { pass: true };
+
+  // All sources: accept if strategic keyword present
   if (STRATEGIC_SIGNALS_RE.test(title)) return { pass: true };
   if (STRATEGIC_SIGNALS_RE.test(summary)) return { pass: true };
+
+  // Tier 3 sources: accept if institutional broad match in title
+  if (sourceTier === 3 && INSTITUTIONAL_BROAD_RE.test(title)) return { pass: true };
 
   return { pass: false, reason: "NO_SYSTEM_RELEVANCE" };
 }
@@ -202,16 +224,129 @@ function checkRelevance(title: string, summary: string = ""): { pass: boolean; r
 type Rss2JsonItem = { title?: string; link?: string; pubDate?: string; description?: string };
 type Rss2JsonResponse = { status: string; items?: Rss2JsonItem[] };
 
+/* Parse raw RSS/Atom XML using the browser's DOMParser */
+function parseRssXml(xml: string): Rss2JsonItem[] {
+  try {
+    const doc = new DOMParser().parseFromString(xml, "text/xml");
+    if (doc.querySelector("parsererror")) return [];
+
+    const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+    // RSS 2.0
+    const rssItems = Array.from(doc.querySelectorAll("channel > item"));
+    if (rssItems.length > 0) {
+      return rssItems.slice(0, 30).map(el => ({
+        title: el.querySelector("title")?.textContent?.trim() ?? "",
+        link: el.querySelector("link")?.textContent?.trim() ?? "",
+        pubDate: el.querySelector("pubDate")?.textContent?.trim()
+          ?? el.getElementsByTagNameNS("http://purl.org/dc/elements/1.1/", "date")[0]?.textContent?.trim()
+          ?? "",
+        description: stripHtml(el.querySelector("description")?.textContent ?? el.querySelector("summary")?.textContent ?? ""),
+      }));
+    }
+
+    // Atom
+    const atomEntries = Array.from(doc.querySelectorAll("feed > entry, entry"));
+    if (atomEntries.length > 0) {
+      return atomEntries.slice(0, 30).map(el => ({
+        title: el.querySelector("title")?.textContent?.trim() ?? "",
+        link: el.querySelector("link[rel='alternate']")?.getAttribute("href")
+          ?? el.querySelector("link")?.getAttribute("href")
+          ?? el.querySelector("link")?.textContent?.trim()
+          ?? "",
+        pubDate: el.querySelector("updated")?.textContent?.trim()
+          ?? el.querySelector("published")?.textContent?.trim()
+          ?? "",
+        description: stripHtml(el.querySelector("content")?.textContent ?? el.querySelector("summary")?.textContent ?? ""),
+      }));
+    }
+
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/* Multi-strategy feed fetcher: rss2json (production) → allorigins proxy (dev/fallback) */
+async function fetchFeedItems(url: string, perFeed: number): Promise<{ items: Rss2JsonItem[]; strategy: string }> {
+  // Strategy 1: rss2json (fast, works in production on EdgeOne CDN)
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${perFeed}`;
+    const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json() as Rss2JsonResponse;
+      if (data.status === "ok" && Array.isArray(data.items) && data.items.length > 0) {
+        return { items: data.items.slice(0, perFeed), strategy: "rss2json" };
+      }
+    }
+    // 422/403/empty → fall through to proxy strategy
+  } catch { /* timeout or network error — try next */ }
+
+  // Strategy 2: Local Node.js RSS proxy (dev only — Vite proxies /api/* to localhost:3001)
+  // Node.js fetches with proper headers, bypassing domain restrictions. Fast 404 in production.
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5500);
+    const proxyUrl = `/api/proxy/rss?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
+    clearTimeout(timer);
+    if (res.ok) {
+      const xml = await res.text();
+      // Sanity check: should be XML, not a JSON error response
+      if (xml.trim().startsWith("<")) {
+        const items = parseRssXml(xml);
+        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "local-proxy" };
+      }
+    }
+  } catch { /* not available (production CDN) — try next */ }
+
+  // Strategy 3: allorigins.win raw proxy + DOMParser
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
+    clearTimeout(timer);
+    if (res.ok) {
+      const xml = await res.text();
+      if (xml.trim().startsWith("<")) {
+        const items = parseRssXml(xml);
+        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
+      }
+    }
+  } catch { /* timeout or proxy error — try next */ }
+
+  // Strategy 4: corsproxy.io + DOMParser (last resort for external access)
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
+    clearTimeout(timer);
+    if (res.ok) {
+      const xml = await res.text();
+      const items = parseRssXml(xml);
+      if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
+    }
+  } catch { /* all strategies exhausted */ }
+
+  throw new Error("ALL_STRATEGIES_EXHAUSTED");
+}
+
 async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
   const PER_FEED = 25;
+  const BATCH_SIZE = 20;
   const started = Date.now();
 
   const feedHealth: FeedHealth[] = [];
   let rawCount = 0;
   let parsedCount = 0;
   const rejectionBreakdown: Record<string, number> = {};
+  const strategyCounts: Record<string, number> = {};
 
-  const BATCH_SIZE = 20;
   const allBatches: Array<{ url: string; domain: string }[]> = [];
   for (let i = 0; i < BROWSER_FEEDS.length; i += BATCH_SIZE) {
     allBatches.push(BROWSER_FEEDS.slice(i, i + BATCH_SIZE) as { url: string; domain: string }[]);
@@ -222,30 +357,25 @@ async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPi
   for (const batch of allBatches) {
     const settled = await Promise.allSettled(
       batch.map(async ({ url, domain }) => {
-        const hostName = new URL(url).hostname.replace(/^(www|feeds|rss|feed)\./i, "");
+        const hostName = new URL(url).hostname.replace(/^(www\.|feeds\.|rss\.|feed\.)/i, "");
         const tier = getSourceTier(hostName);
-        const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${PER_FEED}`;
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 8500);
+        const feedStart = Date.now();
 
         try {
-          const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
-          clearTimeout(timer);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json() as Rss2JsonResponse;
-          if (data.status !== "ok" || !Array.isArray(data.items)) throw new Error("bad status");
+          const { items, strategy } = await fetchFeedItems(url, PER_FEED);
+          strategyCounts[strategy] = (strategyCounts[strategy] ?? 0) + 1;
 
           const feedItems: FeedEvent[] = [];
-          for (const item of data.items.slice(0, PER_FEED)) {
+          for (const item of items) {
             rawCount++;
             const title = (item.title ?? "").trim();
             const summary = (item.description ?? "")
               .replace(/<[^>]+>/g, " ")
               .replace(/\s+/g, " ")
               .trim()
-              .slice(0, 300);
+              .slice(0, 320);
 
-            const check = checkRelevance(title, summary);
+            const check = checkRelevance(title, summary, tier);
             if (!check.pass) {
               const reason = check.reason ?? "NO_SYSTEM_RELEVANCE";
               rejectionBreakdown[reason] = (rejectionBreakdown[reason] ?? 0) + 1;
@@ -256,8 +386,8 @@ async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPi
             let ts = new Date().toISOString();
             try { if (item.pubDate) ts = new Date(item.pubDate).toISOString(); } catch { /* keep default */ }
 
-            const rawEvent: FeedEvent = {
-              id: `b-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            feedItems.push({
+              id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               source: hostName,
               domain: classifyDomain(title, summary, domain),
               title,
@@ -267,15 +397,13 @@ async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPi
               timestamp: ts,
               sourceTier: tier,
               sourceCount: 1,
-            };
-            feedItems.push(rawEvent);
+            });
           }
 
           feedHealth.push({ source: hostName, domain, success: true, itemCount: feedItems.length, lastChecked: new Date().toISOString() });
           return feedItems;
         } catch (err) {
-          clearTimeout(timer);
-          const errorType = err instanceof Error ? (err.name === "AbortError" ? "TIMEOUT" : err.message) : "UNKNOWN";
+          const errorType = err instanceof Error ? err.message : "UNKNOWN";
           feedHealth.push({ source: hostName, domain, success: false, itemCount: 0, errorType, lastChecked: new Date().toISOString() });
           return [] as FeedEvent[];
         }
@@ -339,7 +467,8 @@ async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPi
   const rejectedCount = rawCount - parsedCount;
   const elapsed = Date.now() - started;
 
-  console.log(`[AXION] feeds=${BROWSER_FEEDS.length} ok=${successFeeds} fail=${failFeeds} raw=${rawCount} parsed=${parsedCount} rejected=${rejectedCount} deduped=${dedupedRaw.length} scored=${signals.length} time=${elapsed}ms`);
+  const strategyStr = Object.entries(strategyCounts).map(([k, v]) => `${k}:${v}`).join(" ");
+  console.log(`[AXION] feeds=${BROWSER_FEEDS.length} ok=${successFeeds} fail=${failFeeds} raw=${rawCount} parsed=${parsedCount} rejected=${rejectedCount} deduped=${dedupedRaw.length} scored=${signals.length} strategies={${strategyStr}} time=${elapsed}ms`);
 
   return {
     signals,
@@ -423,7 +552,7 @@ export default function App() {
   const [domainFilter, setDomainFilter] = useState<DomainFilter>("ALL");
   const [executiveBrief, setExecutiveBrief] = useState("");
   const [loading, setLoading] = useState(false);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const [usingFallback, setUsingFallback] = useState<"none" | "supplemented" | "full">("none");
   const [statusMessage, setStatusMessage] = useState("");
   const [pipelineStats, setPipelineStats] = useState<SignalPipelineStats>(DEFAULT_PIPELINE_STATS);
   const [rawSignalCount, setRawSignalCount] = useState(0);
@@ -441,22 +570,38 @@ export default function App() {
     setStatusMessage("");
     try {
       const { signals, stats } = await collectSignals();
-      const live = signals.length > 0;
-      const usable = live ? signals : FALLBACK_SIGNALS;
-      setUsingFallback(!live);
-      setEvents(usable);
+      const liveCount = signals.length;
+      const totalFeeds = stats.successFeeds + stats.failFeeds;
+
+      // Tiered fallback: ≥50 live = no fallback, 20-49 = supplement, <20 = full fallback
+      if (liveCount >= 50) {
+        // No fallback needed
+        setUsingFallback("none");
+        setEvents(signals.slice(0, 500));
+        setStatusMessage(`${liveCount} live signals · ${stats.successFeeds}/${totalFeeds} feeds · ${stats.rawCount} raw`);
+      } else if (liveCount >= 20) {
+        // Supplement with labeled fallback signals up to 50 minimum
+        const needed = Math.min(50 - liveCount, FALLBACK_SIGNALS.length);
+        const supplemented = [...signals, ...FALLBACK_SIGNALS.slice(0, needed)];
+        setUsingFallback("supplemented");
+        setEvents(supplemented);
+        setStatusMessage(`${liveCount} live + ${needed} supplemented · ${stats.successFeeds}/${totalFeeds} feeds · ${stats.rawCount} raw`);
+        console.warn(`[AXION] partial fallback — ${liveCount} live signals, supplemented with ${needed} fallback.`);
+      } else {
+        // Full fallback — not enough live signals
+        setUsingFallback("full");
+        setEvents(liveCount > 0 ? [...signals, ...FALLBACK_SIGNALS] : FALLBACK_SIGNALS);
+        const failSources = stats.feedHealth.filter(f => !f.success).slice(0, 8).map(f => `${f.source}:${f.errorType}`).join(", ");
+        setStatusMessage(`Fallback mode — ${stats.successFeeds}/${totalFeeds} feeds responded. ${liveCount > 0 ? `${liveCount} live recovered.` : ""}`);
+        console.warn(`[AXION] full fallback. liveCount=${liveCount} failFeeds=${stats.failFeeds}. Health: ${failSources}`);
+      }
+
       setPipelineStats(stats);
       setRawSignalCount(stats.rawCount);
       setPinned([]);
       setDismissed([]);
-      if (live) {
-        setStatusMessage(`${stats.usableCount} usable · ${stats.successFeeds}/${stats.successFeeds + stats.failFeeds} feeds · ${stats.rawCount} raw`);
-      } else {
-        setStatusMessage(`Fallback mode — 0/${stats.failFeeds} feeds responded.`);
-        console.warn("[AXION] fallback activated. Feed health:", stats.feedHealth.filter(f => !f.success).map(f => `${f.source}:${f.errorType}`).join(", "));
-      }
     } catch (err) {
-      setUsingFallback(true);
+      setUsingFallback("full");
       setEvents(FALLBACK_SIGNALS);
       setPipelineStats(DEFAULT_PIPELINE_STATS);
       setStatusMessage("Fallback mode — ingestion error.");
@@ -753,8 +898,10 @@ export default function App() {
             <div className="inner">
               <div className="iconHead"><FileText size={14} /> <span>Executive Intelligence Brief</span></div>
               <div className="statusRow">
-                {usingFallback
+                {usingFallback === "full"
                   ? <div className="pill warn">Fallback mode</div>
+                  : usingFallback === "supplemented"
+                  ? <div className="pill warn">Supplemented</div>
                   : <div className="pill"><Globe size={12} /> Live feed</div>
                 }
                 <div className="pill"><Database size={12} /> Persistence active</div>
