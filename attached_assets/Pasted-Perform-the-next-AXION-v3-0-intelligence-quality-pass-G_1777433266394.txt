@@ -1,0 +1,322 @@
+Perform the next AXION v3.0 intelligence-quality pass.
+
+Goal:
+Increase signal density, source reliability, analytic accuracy, and report intelligence quality WITHOUT breaking the current working UI, print system, archive, exports, or EdgeOne static deployment.
+
+Do NOT redesign the UI.
+Do NOT reintroduce purple.
+Do NOT break the current build.
+
+Focus only on:
+1. stronger signal intake
+2. better fallback handling
+3. more accurate scoring
+4. improved source reliability
+5. higher-quality briefs
+6. better data density
+
+━━━━━━━━━━━━━━━━━━━━━━━
+1. SIGNAL VOLUME / FEED RELIABILITY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Current rss2json limits some feeds to ~10 items and some sources return 422.
+
+Improve the feed pipeline so AXION gets more usable signals by:
+
+- keeping the existing RSS feed system
+- adding more reliable feeds where possible
+- replacing feeds that consistently fail
+- adding fallback feeds per domain
+- tracking success/failure per feed
+- excluding dead feeds from active scoring during the current pull
+- preserving failed-feed logging quietly
+
+Add a feed health object:
+
+{
+  source,
+  domain,
+  success,
+  itemCount,
+  errorType,
+  lastChecked
+}
+
+Do not let failed feeds reduce overall confidence.
+Only score successfully collected signals.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+2. BETTER DOMAIN FEED COVERAGE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Ensure every core domain has several reliable sources.
+
+Domains:
+- Global Affairs
+- Security / Defense
+- Infrastructure
+- Markets / Economy
+- Technology
+- Energy
+- AI / Compute
+- Supply Chains
+- Information Warfare
+- Cyber / Signals
+- Policy / Regulation
+- Governance / Institutions
+- Legal / Courts
+- Public Health / Biosecurity
+- Space / Orbital Systems
+
+If one domain has weak feed coverage, add more sources.
+If a feed repeatedly returns 422 or empty results, replace it or demote it.
+
+Prioritize reliable public RSS sources from:
+- Reuters
+- AP
+- BBC
+- NPR
+- The Hill
+- Defense News
+- Breaking Defense
+- War on the Rocks if available
+- CISA
+- NIST / NVD
+- Federal Register
+- SEC / finance feeds if available
+- Energy Information Administration if available
+- NASA / NOAA if available
+- major technology/security feeds
+
+Do not add garbage celebrity/sports/entertainment sources.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+3. SIGNAL QUALITY GATE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Strengthen the relevance filter.
+
+A signal should only pass if it has at least one of:
+
+- institutional actor
+- government / policy relevance
+- military / security relevance
+- market / energy relevance
+- infrastructure relevance
+- technology / AI / cyber relevance
+- supply chain relevance
+- legal / regulatory relevance
+- systemic public impact
+
+Reject:
+- entertainment
+- sports
+- celebrity
+- random crime unless institutional/security relevance
+- lifestyle
+- soft human-interest
+- food/travel/fashion
+- shallow opinion pieces unless tied to policy or institutional power
+
+Add a reason code when a signal is rejected:
+- NO_SYSTEM_RELEVANCE
+- ENTERTAINMENT_NOISE
+- SPORTS_NOISE
+- LIFESTYLE_NOISE
+- DUPLICATE_LOW_VALUE
+- WEAK_SOURCE
+- EMPTY_SUMMARY
+
+Keep rejected signals out of scoring and reports.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+4. SOURCE RELIABILITY MODEL
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Improve source reliability scoring.
+
+Create tiers:
+
+TIER 1:
+official government, regulatory, institutional, primary-source feeds
+
+TIER 2:
+major wire services and established news organizations
+
+TIER 3:
+specialist analysis outlets
+
+TIER 4:
+unknown / weak / inconsistent sources
+
+Use source tier in confidence scoring.
+
+Confidence should NOT be high just because wording sounds strong.
+Confidence must depend on:
+- source reliability
+- corroboration
+- specificity
+- recency
+- domain consistency
+- whether the claim is direct or interpretive
+
+Do not inflate confidence.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+5. CORROBORATION LOGIC
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Improve duplicate/corroboration behavior.
+
+If multiple feeds report the same event:
+- merge them into one stronger signal
+- increase corroboration strength
+- preserve source count
+- show sourceCount where useful
+- keep strongest title and best summary
+
+A signal with multiple reliable sources should score higher than a single-source signal.
+
+Do not show the same event multiple times under slightly different headlines.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+6. ANALYTIC DEPTH UPGRADE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Improve report language.
+
+Remove vague boilerplate:
+- “monitor for trajectory change”
+- “cross-domain secondary effect potential”
+- “movement in the operating environment”
+unless tied to a specific mechanism.
+
+Every primary signal must explain:
+- what happened
+- who/institution involved
+- mechanism
+- system affected
+- why it matters
+- pressure effect
+- next likely movement
+- watchpoint
+
+If AXION cannot explain mechanism, do not make the signal primary.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7. DATA TABLES AND CHARTS
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add stronger data sections to reports and print output.
+
+Include:
+
+1. Signal Intake Table
+- Raw collected
+- Parsed
+- Rejected
+- Deduplicated
+- Scored
+- Used in brief
+
+2. Source Health Table
+- feeds attempted
+- feeds successful
+- feeds failed
+- best-performing domains
+- weak domains
+
+3. Domain Distribution Chart
+Text-based bar chart using actual signal counts.
+
+4. Confidence Distribution
+CONFIRMED / LIKELY / CONTESTED / UNKNOWN counts.
+
+5. Pressure Vector Table
+Source Domain → Target Domain → Intensity → Direction
+
+Keep charts clean and print-friendly.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+8. FULL BRIEF LENGTH
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Full Brief should produce true 5–7 page PDF output when enough quality signals exist.
+
+Use:
+- 5 primary signals
+- expanded data tables
+- full pressure map
+- signal matrix
+- appendix grouped by domain
+- forward watch indicators
+
+If not enough signals exist, say so honestly and produce the strongest shorter brief.
+
+Never pad with weak junk.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+9. UI SIGNAL COUNT CLARITY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Make signal counts more transparent.
+
+Display:
+- Raw collected
+- Usable signals
+- Shown in queue
+- Used in brief
+
+Example:
+RAW: 742
+USABLE: 318
+QUEUE: 300
+USED: 40
+
+Do not make “Live Signals” misleading.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+10. PRESERVE CURRENT SYSTEM
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Do not break:
+- current UI
+- current black/steel style
+- current print/PDF style
+- current archive
+- current exports
+- EdgeOne static deployment
+- localStorage persistence
+- verified / used / dismissed / excluded states
+
+No backend dependency unless already present.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+11. BUILD VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+After implementation:
+- run npm run build
+- fix errors
+- test Pull Signals
+- test Daily
+- test Weekly
+- test Full
+- test Print/PDF
+- test Archive
+- test TXT export
+- test Article export
+- test Bulletin export
+
+Final response should include:
+- files changed
+- feed count
+- successful feed count in test
+- raw signals collected
+- usable signals
+- rejected count
+- build result
+- known limitations
+
+Final target:
+AXION v3.0 should now be more accurate, more data-driven, more signal-rich, and more defensible as a real intelligence synthesis system.

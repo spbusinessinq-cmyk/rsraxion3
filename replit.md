@@ -12,22 +12,65 @@ RSR AXION is an Intelligence Synthesis System — a React + TypeScript + Vite si
 - **Deployment**: Static — `npm run build` → `dist/assets-v3/` served by EdgeOne CDN
 - **Persistence**: localStorage only, keys at `-v6` suffix
 
-## v3.0 Intelligence Engine (June 2025)
+## v3.0 Intelligence Engine (Pass 2)
+
+### Source Reliability Tiers
+Four-tier model anchored to source identity, not keyword strength:
+- **Tier 1** (Official/Institutional): cisa.gov, eia.gov, federalregister.gov, sec.gov, nasa.gov, who.int, understandingwar.org, iswresearch.org, defense.gov, hhs.gov
+- **Tier 2** (Major Wire/Established): reuters.com, bbc.co.uk, apnews.com, nytimes.com, theguardian.com, ft.com, bloomberg.com, cnbc.com, aljazeera.com, npr.org, axios.com, politico.com, thehill.com, foreignaffairs.com, cfr.org
+- **Tier 3** (Specialist/Trade): krebsonsecurity.com, bleepingcomputer.com, darkreading.com, defensenews.com, defenseone.com, breakingdefense.com, thedrive.com, navalnews.com, warontherocks.com, oilprice.com, freightwaves.com, rand.org, brookings.edu, statnews.com, wired.com, techcrunch.com, arstechnica.com, theregister.com, zdnet.com, spacenews.com
+- **Tier 4**: Unknown / unverified sources
+
+Confidence base by tier:
+- T1: 88 base → 85–97 range
+- T2: 76 base → 73–90 range
+- T3: 64 base → 61–82 range
+- T4: 55 base → 52–72 range
+
+Confidence is NOT keyword-inflated — it is anchored to source tier + title specificity + summary length + recency + corroboration.
 
 ### Multi-Factor Scoring (scoreSignal)
-Four-component scoring model — no random values:
+Four-component scoring model:
 - **A. Relevance Score** (0–100): domainWeight + institutionalImpact + systemImpact + crossDomainPotential + recencyWeight
-- **B. Confidence Score** (0–100): sourceReliability + titleClarity + recencyIntegrity
-- **C. Threat Score** (0–100): threatBase + systemicImpact + geographicSpread + escalationVelocity + crossDomainPotential
-- **D. Priority Score**: used for sort order (confidence × 0.6 + severity × 10 + recency)
+- **B. Confidence Score** (0–100): tierBase + titleClarity + summaryBonus + corroborationBoost + recency
+- **C. Threat Score** (0–100): threatBase + systemicImpact + geographicSpread + escalationVelocity
+- **D. Priority Score**: confidence × 0.55 + severity × 10 + recency × 8 + corrobBonus
 
-### Signal Intake
-- **~62 RSS feeds** across 9 domain categories, batched in groups of 20
-- **PER_FEED = 25** items per feed (pipeline target toward 2,000 signals)
-- Post-dedup cap: 450 signals sorted by priority score
-- Hard relevance filter (`isStrategicallyRelevant`) excludes entertainment, sports, lifestyle, gossip
-- Positive strategic keywords required for signal to pass
-- Failed feeds silently skipped; 8.5s AbortController timeout per feed
+### Corroboration Logic
+- After collecting from all feeds, signals grouped by normalized title prefix (50 chars)
+- Best signal in each group selected: lowest tier number first, then longest summary
+- `sourceCount` set to group size; `corroborated = true` if sourceCount > 1
+- Corroborated signals receive up to +10 confidence boost (sourceCount - 1) × 4
+- Displayed in UI with ◆ indicator and source count
+- Included in brief Signal Matrix with ◆ marker
+
+### Signal Quality Gate — Rejection Reason Codes
+Every signal is checked before scoring:
+- `NO_SYSTEM_RELEVANCE` — no strategic keyword in title or summary
+- `ENTERTAINMENT_NOISE` — celebrity, awards, film, k-pop, etc.
+- `SPORTS_NOISE` — sports unless tied to institutional/security relevance
+- `LIFESTYLE_NOISE` — recipes, travel, wellness, fashion
+- `EMPTY_SUMMARY` — title too short or blank
+- `DUPLICATE_LOW_VALUE` — handled by corroboration deduplification
+- `WEAK_SOURCE` — reserved for future feed-level scoring
+
+Rejection breakdown is tracked per-pull and reported in §3 Data Summary of the brief.
+
+### Feed Health Tracking
+Per-feed `FeedHealth` object: `{ source, domain, success, itemCount, errorType, lastChecked }`
+- Failed feeds are quietly logged (not shown in UI)
+- Do not reduce confidence of successfully collected signals
+- Feed health stats aggregated into `SignalPipelineStats`
+
+### Signal Intake Pipeline Stats (`SignalPipelineStats`)
+Tracked per-pull: rawCount, parsedCount, rejectedCount, rejectionBreakdown, dedupCount, usableCount, successFeeds, failFeeds, feedHealth[], topDomains[], weakDomains[], elapsed
+
+### Signal Intake Scale
+- **68 curated RSS feeds** across 12 domain categories (was 49)
+- New sources: AP News (world/intl/politics/business/health), Federal Register, Space.com, SpaceNews, Wired Security, Wired AI, The Verge, BBC Health/Business, NYT Economy, NPR, CNBC dual feed, Thomas Net, Utility Dive, ENR
+- **PER_FEED = 25** items per feed
+- Batched in groups of 20 to keep UI responsive
+- Post-dedup cap: 500 signals sorted by priority score
 
 ### Domain Classification (16 internal domains)
 Security / Defense | Cyber / Signals | AI / Compute | Energy | Supply Chains | Infrastructure | Markets / Economy | Policy / Regulation | Legal / Courts | Social Stability | Public Health / Biosecurity | Space / Orbital Systems | Information Warfare | Global Affairs | Governance / Institutions | (feed default fallback)
@@ -38,10 +81,11 @@ Security / Defense | Cyber / Signals | AI / Compute | Energy | Supply Chains | I
 
 ### Pressure Model
 - `assessPressureState(event)`: BUILDING | TRANSFERRING | RELEASING | STABLE | FRAGMENTED
-- `inferPressureVector(event)`: infers source→target domain transmission (e.g., Energy→Markets)
+- `inferPressureVector(event)`: infers source→target domain transmission
+- `buildPressureVectorTable`: groups all vectors by source→target, shows intensity and signal count
 
 ## 14-Section Full Intelligence Brief Structure
-§1 Executive Overview | §2 Threat Posture Summary | §3 Data Summary | §4 Domain Pressure Chart (text bar) | §5 Primary Signals (9-field: EVENT/CONTEXT/MECHANISM/WHY IT MATTERS/SYSTEM IMPACT/PRESSURE STATE/VECTOR/FORWARD OUTLOOK/WATCHPOINT) | §6 Signal Matrix by confidence tier | §7 System Mechanics | §8 System Intersection | §9 Pressure Map | §10 Constraints | §11 Forward Projection (4 paths) | §12 Operator Takeaway | §13 Watchpoints | §14 Appendix
+§1 Executive Overview (includes corroborated signal count, pipeline summary line) | §2 Threat Posture Summary | §3 Data Summary (Signal Intake Table + Source Health Table + Confidence Distribution + Domain/Metric Summary) | §4 Domain Pressure Chart (text bar with %, count, band) | §5 Primary Signals (10-field blocks: domain/tier/corroboration, confidence, event, context, mechanism, why it matters, system impact, pressure state/vector, forward outlook, watchpoint) | §6 Signal Matrix by confidence tier (with tier label, corroboration indicator) | §7 System Mechanics | §8 System Intersection | §9 Pressure Map + Vector Table | §10 Constraints | §11 Forward Projection (4 paths) | §12 Operator Takeaway | §13 Watchpoints | §14 Appendix (grouped by domain, sorted by signal count)
 
 ### Brief Signal Limits
 - Quick: 6 signals (1 page equiv)
@@ -49,23 +93,35 @@ Security / Defense | Cyber / Signals | AI / Compute | Energy | Supply Chains | I
 - Weekly: 25 signals (4–6 pages)
 - Full: 40 signals (5–7 pages, states insufficient density if < 8 signals)
 
+### Optional 7th Parameter
+`buildFullBrief(sourceSet, matrix, patterns, mode, depth, now, stats?)` — pass `SignalPipelineStats` for full intake table; omit for fallback/archive mode
+
+## UI Signal Count Transparency
+Metric strip labels changed from RSR Verified/Live Signals to:
+- **Raw Collected**: total feed items before relevance filter (— if fallback)
+- **Usable Signals**: after corroboration + scoring + dedup cap
+- **Used In Brief**: signals used in current brief generation
+- **Confidence**: average confidence of visible signals
+
+Queue card now shows: source · T1/T2/T3/T4 tier · ◆N (if corroborated) · CONFIDENCE% · severity dots
+
 ## v3.0 Visual System
 - **Palette**: Operator-grade steel/black — `#050608` base, zero purple/violet/indigo anywhere
 - **Accent**: Steel-cyan `rgba(56,189,248,*)` only as rare data highlight
 - **Fonts**: Orbitron 400/700/900 for brand/display; IBM Plex Mono 400/500/600 for all data/UI text
-- **Global scrollbars**: 6px width, `#050608` track, `#2a2f36` thumb, `#3a424d` hover — standardized everywhere
-- **Queue cards**: Compact operator-grade rows — 2-line summary clamp, small controls, minimal padding
+- **Global scrollbars**: 6px width, `#050608` track, `#2a2f36` thumb, `#3a424d` hover
+- **Queue cards**: Compact operator-grade rows — 2-line summary clamp, small controls, corroboration ◆ indicator
 - **Domain chips in UI**: ALL / Global Affairs / Security / Defense / Cyber / Signals / Technology / Markets / Economy / Energy / Policy / Regulation / Infrastructure
 
 ## Print/PDF Output
-- `buildPrintHtml(text)` generates a full HTML document with Orbitron headings, metadata table, section blocks
+- `buildPrintHtml(text)` generates full HTML document with Orbitron headings, metadata table, structured section blocks
 - Auto-print script on load; professional @media print CSS with page-break handling
-- Clean white document — not the dark console view
+- Sub-section headers (`──`) rendered as sub-heads; dividers rendered as hr elements
 
 ## Exports
 - **TXT**: Full brief text with header + all sections
-- **Article**: 7-section publishable analysis (Opening / Background / Current Developments / Mechanism / System Implications / Outlook / Closing)
-- **Bulletin**: Compact 5-section situational bulletin (Posture / Key Developments / Strategic Implication / Watch Indicators)
+- **Article**: 7-section publishable analysis (Opening / Background / Current Developments / Mechanism / System Implications / Outlook / Closing) — includes tier note on source mix
+- **Bulletin**: Compact 5-section situational bulletin (Posture / Key Developments / Strategic Implication / Pattern / Watch Indicators) — includes tier and corroboration labels
 - **Print**: Opens professional print HTML in new window
 
 ## Signal Lifecycle States
@@ -73,9 +129,9 @@ Security / Defense | Cyber / Signals | AI / Compute | Energy | Supply Chains | I
 - Analyst notes per signal persisted to localStorage
 
 ## Key Files
-- `src/App.tsx` — shell, feed ingestion, state machine, UI
-- `src/lib/utils.ts` — intelligence engine: scoring, brief builders, pressure model
-- `src/lib/types.ts` — TypeScript interfaces
+- `src/App.tsx` — shell, feed ingestion (68 feeds), signal pipeline, UI
+- `src/lib/utils.ts` — intelligence engine: source tiers, scoring, brief builders, data tables, pressure model
+- `src/lib/types.ts` — TypeScript interfaces (FeedHealth, SignalPipelineStats, RejectionReason added)
 - `src/index.css` — complete styling, scrollbars, print CSS
 - `src/components/BlackdogStatus.tsx` — status badge
 - `vite.config.ts` — build config (outDir: dist/assets-v3)

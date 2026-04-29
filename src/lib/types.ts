@@ -18,6 +18,15 @@ export type DomainFilter =
 
 export type PressureState = "BUILDING" | "TRANSFERRING" | "RELEASING" | "STABLE" | "FRAGMENTED";
 
+export type RejectionReason =
+  | "NO_SYSTEM_RELEVANCE"
+  | "ENTERTAINMENT_NOISE"
+  | "SPORTS_NOISE"
+  | "LIFESTYLE_NOISE"
+  | "DUPLICATE_LOW_VALUE"
+  | "WEAK_SOURCE"
+  | "EMPTY_SUMMARY";
+
 export type FeedEvent = {
   id: string;
   source: string;
@@ -27,6 +36,33 @@ export type FeedEvent = {
   severity: number;
   confidence: number;
   timestamp: string;
+  sourceCount?: number;
+  corroborated?: boolean;
+  sourceTier?: 1 | 2 | 3 | 4;
+};
+
+export type FeedHealth = {
+  source: string;
+  domain: string;
+  success: boolean;
+  itemCount: number;
+  errorType?: string;
+  lastChecked: string;
+};
+
+export type SignalPipelineStats = {
+  rawCount: number;
+  parsedCount: number;
+  rejectedCount: number;
+  rejectionBreakdown: Record<string, number>;
+  dedupCount: number;
+  usableCount: number;
+  successFeeds: number;
+  failFeeds: number;
+  feedHealth: FeedHealth[];
+  topDomains: Array<{ domain: string; count: number }>;
+  weakDomains: string[];
+  elapsed: number;
 };
 
 export type ThreatMatrix = {

@@ -1,4 +1,4 @@
-import type { FeedEvent, ThreatMatrix } from "./types";
+import type { FeedEvent, SignalPipelineStats, ThreatMatrix } from "./types";
 
 /* ── Date / Location Helpers ────────────────────────────────────────────── */
 
@@ -16,6 +16,27 @@ function getBrowserDateTimeParts(now: Date) {
 
 function getLocation(): string {
   return "Los Angeles, California";
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SOURCE RELIABILITY TIERS
+   Tier 1: Official government/regulatory/institutional primary sources
+   Tier 2: Major wire services and established news organizations
+   Tier 3: Specialist analysis and trade outlets
+   Tier 4: Unknown / weak / inconsistent sources
+═══════════════════════════════════════════════════════════ */
+
+const SOURCE_TIER_1_RE = /cisa\.gov|eia\.gov|federalregister\.gov|sec\.gov|nasa\.gov|noaa\.gov|who\.int|nist\.gov|nvd\.nist|iswresearch\.org|understandingwar\.org|pentagon\.mil|whitehouse\.gov|congress\.gov|state\.gov|defense\.gov|energy\.gov|hhs\.gov|dhs\.gov|fbi\.gov|fda\.gov/i;
+
+const SOURCE_TIER_2_RE = /reuters\.com|bbc\.co\.uk|bbc\.com|apnews\.com|nytimes\.com|theguardian\.com|wsj\.com|ft\.com|bloomberg\.com|cnbc\.com|aljazeera\.com|dw\.com|npr\.org|axios\.com|politico\.com|thehill\.com|foreignaffairs\.com|foreignpolicy\.com|cfr\.org|skynews\.com|economist\.com|washingtonpost\.com/i;
+
+const SOURCE_TIER_3_RE = /krebsonsecurity\.com|bleepingcomputer\.com|darkreading\.com|securityweek\.com|threatpost\.com|theregister\.com|arstechnica\.com|techcrunch\.com|technologyreview\.com|venturebeat\.com|defensenews\.com|defenseone\.com|breakingdefense\.com|thedrive\.com|navalnews\.com|warontherocks\.com|taskandpurpose\.com|oilprice\.com|freightwaves\.com|supplychaindive\.com|rand\.org|brookings\.edu|statnews\.com|wired\.com|zdnet\.com|theintercept\.com|logisticsmgmt\.com|energymonitor\.ai|space\.com|theverge\.com|foreignbrief\.com|janes\.com|stratfor\.com/i;
+
+export function getSourceTier(source: string): 1 | 2 | 3 | 4 {
+  if (SOURCE_TIER_1_RE.test(source)) return 1;
+  if (SOURCE_TIER_2_RE.test(source)) return 2;
+  if (SOURCE_TIER_3_RE.test(source)) return 3;
+  return 4;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -44,8 +65,6 @@ const GEO_SPREAD_RE = /\b(global|worldwide|international|multinational|multiple 
 
 const ESCALATION_RE = /\b(urgent|breaking|immediate|rapidly|unprecedented|sudden|emergency|alarming|critical|imminent|accelerat|spiral|surge|soar)\b/i;
 
-const RELIABLE_SOURCES_RE = /reuters|bbc|associated.?press|financial.?times|washington.?post|nytimes|guardian|bloomberg|wsj|wall.?street|foreign.?affairs|foreignpolicy|defenseone|defensenews|war.?on.?the.?rocks|breaking.?defense|krebsonsecurity|bleeping|cisa|darkreading|securityweek|threatpost|oilprice|cnbc|the.?hill|politico|al.?jazeera|dw\.com|npr\.org|navalnews|thedrive|rand\.org|brookings|cfr\.org|theintercept|arstechnica|wired\.com|theregister|zdnet|techcrunch|technologyreview|ft\.com|eia\.gov|iswresearch|understandingwar/i;
-
 const DOMAIN_WEIGHTS: Record<string, number> = {
   "Security / Defense": 25,
   "Infrastructure": 25,
@@ -69,7 +88,11 @@ const DOMAIN_WEIGHTS: Record<string, number> = {
 };
 
 /* ═══════════════════════════════════════════════════════════
-   SIGNAL SCORING ENGINE
+   SIGNAL SCORING ENGINE — Multi-Factor Model
+   A. Relevance Score (0–100)
+   B. Confidence Score (0–100)  — tier-based, not keyword-inflated
+   C. Threat Score (0–100)
+   D. Corroboration boost (source count > 1)
 ═══════════════════════════════════════════════════════════ */
 
 export function scoreSignal(event: FeedEvent): FeedEvent {
@@ -101,12 +124,22 @@ export function scoreSignal(event: FeedEvent): FeedEvent {
 
   // A. Relevance Score (0–100)
   const relevanceScore = Math.min(100, domainW + instScore + sysScore + crossScore + recencyWeight);
+  void relevanceScore;
 
-  // B. Confidence Score (0–100)
-  const srcRel = RELIABLE_SOURCES_RE.test(event.source) ? 88 : 68;
-  const titleClarity = event.title.length > 35 ? 12 : 6;
-  const confidence = Math.min(97, Math.max(58, Math.round(
-    srcRel * 0.35 + 22 + titleClarity + recencyWeight * 0.5
+  // B. Confidence Score — anchored to source tier, NOT keyword strength
+  const tier = event.sourceTier ?? getSourceTier(event.source);
+  const tierBase = tier === 1 ? 88 : tier === 2 ? 76 : tier === 3 ? 64 : 55;
+  // Title specificity: longer, specific titles are more reliable
+  const titleClarity = event.title.length > 60 ? 10 : event.title.length > 40 ? 7 : event.title.length > 25 ? 4 : 1;
+  // Summary specificity
+  const summaryBonus = (event.summary?.length ?? 0) > 100 ? 4 : (event.summary?.length ?? 0) > 40 ? 2 : 0;
+  // Corroboration: multiple independent sources confirm this story
+  const corrobBoost = Math.min(10, ((event.sourceCount ?? 1) - 1) * 4);
+  // Domain consistency (source covers this domain normally)
+  const domConsistency = 0; // reserved for future feed-level metadata
+
+  const confidence = Math.min(97, Math.max(52, Math.round(
+    tierBase + titleClarity + summaryBonus + corrobBoost + recencyWeight * 0.25 + domConsistency
   )));
 
   // C. Threat Score (0–100)
@@ -120,11 +153,13 @@ export function scoreSignal(event: FeedEvent): FeedEvent {
   // Severity from threat score
   const severity = threatScore >= 70 ? 4 : threatScore >= 48 ? 3 : threatScore >= 26 ? 2 : 1;
 
-  // D. Priority Score (0–100) — used for sorting externally
-  // Stored on event for downstream use
-  void relevanceScore; // used in sorting in App.tsx via scoreSignal
-
-  return { ...event, confidence, severity };
+  return {
+    ...event,
+    confidence,
+    severity,
+    sourceTier: tier,
+    corroborated: (event.sourceCount ?? 1) > 1,
+  };
 }
 
 /* ── Threat Band (numeric cluster count → label) ────────────────────────── */
@@ -223,16 +258,17 @@ function buildDomainPressureChart(events: FeedEvent[]): string {
   events.forEach(e => { groups[e.domain] = (groups[e.domain] ?? 0) + 1; });
 
   const total = Math.max(1, events.length);
-  const BAR = 18;
-  const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const BAR = 20;
+  const sorted = Object.entries(groups).sort((a, b) => b[1] - a[1]).slice(0, 10);
 
   return sorted.map(([domain, count]) => {
     const pct = count / total;
     const filled = Math.max(1, Math.round(pct * BAR * 3.5));
     const bars = "█".repeat(Math.min(BAR, filled)) + "░".repeat(Math.max(0, BAR - Math.min(BAR, filled)));
     const band = pct >= 0.22 ? "HIGH" : pct >= 0.13 ? "ELEVATED" : pct >= 0.06 ? "GUARDED" : "LOW";
-    const label = domain.padEnd(28).slice(0, 28);
-    return `${label}  ${bars}  ${band.padEnd(9)}  ${count} signals`;
+    const pctStr = `${(pct * 100).toFixed(0)}%`.padStart(4);
+    const label = domain.padEnd(30).slice(0, 30);
+    return `${label}  ${bars}  ${band.padEnd(9)}  ${String(count).padStart(3)} signals  ${pctStr}`;
   }).join("\n");
 }
 
@@ -242,7 +278,7 @@ function buildDomainPressureChart(events: FeedEvent[]): string {
 
 function buildContext(e: FeedEvent): string {
   if (e.summary && e.summary.length > 20) {
-    return e.summary.replace(/\s+/g, " ").trim().slice(0, 190);
+    return e.summary.replace(/\s+/g, " ").trim().slice(0, 220);
   }
   if (/Security|Defense/.test(e.domain)) return "Military or security-related development from a monitored source.";
   if (/Markets|Economy/.test(e.domain)) return "Economic or financial signal from a monitored market source.";
@@ -255,26 +291,33 @@ function buildMechanism(e: FeedEvent, matrix: ThreatMatrix): string {
   const text = `${e.title} ${e.summary}`.toLowerCase();
 
   if (/Security|Defense/.test(e.domain)) {
-    if (MILITARY_RE.test(text)) return "Military capability deployment or posture adjustment affecting strategic balance.";
+    if (MILITARY_RE.test(text)) {
+      if (/deploy|reposition|redeploy|mov/i.test(text)) return "Military forces or assets are repositioning, altering the tactical balance and signaling posture to adversaries and allies simultaneously.";
+      if (/drill|exercise|train/i.test(text)) return "Military readiness exercise or training event that elevates preparedness posture and serves as a deterrence signal to regional actors.";
+      return "Military capability adjustment affecting strategic balance, deterrence calculations, and partner nation posturing.";
+    }
     return matrix.conflict !== "LOW"
-      ? "Security-domain pressure propagating through deterrence signals, force posture, and partner nation responses."
-      : "Routine security signaling — watch for escalation indicators.";
+      ? "Security-domain pressure propagating through deterrence signals, force posture changes, and cascading partner nation responses — each step compressing decision time."
+      : "Security-domain signal within normal monitoring parameters — watch for posture changes or third-party involvement.";
   }
   if (/Markets|Economy/.test(e.domain)) {
-    if (ENERGY_RE.test(text)) return "Energy price or supply dynamics feeding into commodity markets and logistics chains.";
-    return "Economic signal transmitting through credit, trade finance, or commodity pricing channels.";
+    if (ENERGY_RE.test(text)) return "Energy price or supply dynamics feeding directly into commodity markets, transportation costs, and downstream manufacturing and logistics chains.";
+    if (/interest.rate|central.bank|federal.reserve|ecb/i.test(text)) return "Central bank action or signaling that reprices credit conditions, sovereign debt, and cross-border capital flows simultaneously.";
+    return "Economic signal transmitting through credit availability, trade finance, or commodity pricing channels into adjacent sectors.";
   }
   if (/Technology|Cyber|Infrastructure/.test(e.domain)) {
-    if (/ransomware|malware|exploit|breach/i.test(text)) return "Adversarial exploitation of a digital or physical vulnerability with potential cascade across connected systems.";
-    return "Technology or infrastructure change propagating through dependency networks — consequence profiles are nonlinear.";
+    if (/ransomware|malware|exploit|breach|zero.?day/i.test(text)) return "Active adversarial exploitation of a digital or physical vulnerability with confirmed lateral spread potential across connected and dependent systems.";
+    if (/chip|semiconductor|compute/i.test(text)) return "Semiconductor or compute infrastructure development that reshapes capability gaps between strategic competitors and creates downstream supply dependencies.";
+    return "Technology or infrastructure change propagating through dependency networks — consequence profiles are nonlinear when interdependencies are activated.";
   }
   if (/Policy|Domestic|Governance/.test(e.domain)) {
     return POLICY_RE.test(text)
-      ? "Regulatory or legislative action reshaping operating conditions for affected industries or geographies."
-      : "Institutional signaling preceding potential executive, diplomatic, or legislative action.";
+      ? "Regulatory or legislative action that restructures operating conditions — affecting compliance obligations, market access, and strategic positioning in the affected sectors."
+      : "Institutional signaling that typically precedes formal executive, diplomatic, or legislative action within one to three cycle windows.";
   }
-  if (/Energy/.test(e.domain)) return "Energy supply, pricing, or infrastructure dynamics transmitting into industrial and economic activity.";
-  return "Signal operating through a cross-domain transmission mechanism — monitor secondary domain effects.";
+  if (/Energy/.test(e.domain)) return "Energy supply, pricing, or infrastructure dynamics transmitting into industrial output, transportation networks, and economic activity across all import-dependent sectors.";
+  if (/Cyber/.test(e.domain)) return "Cyber-domain event propagating through network dependency chains — attribution, lateral reach, and critical system adjacency are the primary determinants of consequence severity.";
+  return "Signal operating through a cross-domain transmission pathway. Identify the proximate actor, the affected system, and the transmission channel before assessing severity.";
 }
 
 function buildWhyItMatters(e: FeedEvent, matrix: ThreatMatrix): string {
@@ -284,77 +327,80 @@ function buildWhyItMatters(e: FeedEvent, matrix: ThreatMatrix): string {
     return "Affects commodity pricing, credit conditions, and trade corridor resilience. Economic stress in this domain generates downstream pressure on logistics, finance, and policy across interconnected systems.";
   if (/Technology|Cyber|Infrastructure/.test(e.domain))
     return matrix.infrastructure !== "LOW"
-      ? "Active pressure on technology or infrastructure systems that underpin economic activity, defense capability, and communications. Disruption in this domain amplifies nonlinearly."
-      : "Technology or infrastructure exposure with latent systemic risk. Consequence profiles are disproportionate to volume of preceding indicators.";
+      ? "Active pressure on technology or infrastructure systems that underpin economic activity, defense capability, and communications. Disruption in this domain amplifies nonlinearly when multiple systems are under simultaneous pressure."
+      : "Technology or infrastructure signal with latent systemic risk. Consequence profiles are disproportionate to preceding indicator volume — monitoring gaps here create the largest analytic blind spots.";
   if (/Policy|Domestic|Governance/.test(e.domain))
     return "Shapes the regulatory, diplomatic, and institutional operating environment. Institutional shifts frequently precede material changes to legal, financial, or strategic conditions within one to three cycles.";
   if (/Energy/.test(e.domain))
-    return "Energy market dynamics carry direct downstream effects across manufacturing, transportation, and economic output. Supply constraint or price volatility in this domain reaches all interconnected sectors.";
+    return "Energy market dynamics carry direct downstream effects across manufacturing, transportation, and economic output. Supply constraint or price volatility in this domain propagates to all interconnected sectors within 24–72 hours.";
   if (/Cyber/.test(e.domain))
-    return "Cyber-domain events carry disproportionate consequence relative to their signal volume. Attribution, lateral spread, and critical system adjacency are the primary risk determinants.";
-  return "Cross-domain significance with secondary transmission potential into security, economic, and institutional systems.";
+    return "Cyber-domain events carry disproportionate consequence relative to signal volume. Attribution accuracy, lateral spread velocity, and critical system adjacency are the primary risk determinants.";
+  return "Cross-domain signal with secondary transmission potential into security, economic, and institutional systems — the full consequence profile is not visible from the originating domain alone.";
 }
 
 function buildSystemImpact(e: FeedEvent, matrix: ThreatMatrix): string {
   if (/Security|Defense/.test(e.domain))
     return matrix.markets !== "LOW"
-      ? "Security, Markets (energy/logistics exposure), and partner nation positioning — coupling active."
+      ? "Security, Markets (energy/logistics exposure), and partner nation positioning — compounding coupling active across at least two domains."
       : "Security domain and adjacent diplomatic, institutional, and intelligence channels.";
   if (/Markets|Economy/.test(e.domain))
     return matrix.conflict !== "LOW"
-      ? "Markets, Energy pricing, and conflict-adjacent supply chains — compounding active."
+      ? "Markets, Energy pricing, and conflict-adjacent supply chains — multi-domain compounding active."
       : "Markets, Trade logistics, Financial system conditions, and sovereign debt exposure.";
   if (/Technology|Cyber|Infrastructure/.test(e.domain))
-    return "Infrastructure, Technology dependencies, and all sectors reliant on affected systems. Cascade potential is the primary risk variable.";
+    return "Infrastructure, Technology dependencies, and all sectors reliant on affected systems. Cascade failure potential is the primary risk variable when interdependent systems are simultaneously exposed.";
   if (/Policy|Domestic|Governance/.test(e.domain))
     return "Regulatory environment, Institutional credibility, Diplomatic conditions, and market-sensitive policy channels.";
   if (/Energy/.test(e.domain))
     return "Energy production, Industrial supply chains, Transportation networks, and economic activity across all import-dependent sectors.";
-  return "Cross-domain impact — monitor for secondary transmission into security, economic, and infrastructure systems.";
+  return "Cross-domain impact — monitor for secondary transmission into security, economic, and infrastructure systems within the next 24–48 hours.";
 }
 
 function buildForwardOutlook(e: FeedEvent, matrix: ThreatMatrix): string {
   if (/Security|Defense/.test(e.domain))
     return matrix.conflict !== "LOW"
-      ? "Track escalation velocity, geographic spread, partner nation responses, and kinetic follow-on activity. Secondary transmission into energy and logistics is the leading risk."
-      : "Monitor conflict-adjacent indicators for directional change. No confirmed escalation pathway at current posture.";
+      ? "Track escalation velocity, geographic spread of affected forces, partner nation force movements, and kinetic follow-on activity. Secondary transmission into energy and logistics represents the leading risk pathway."
+      : "Monitor for confirming force movements, deployment orders, or third-party involvement that would indicate directional change from the current posture.";
   if (/Markets|Economy/.test(e.domain))
     return matrix.markets !== "LOW"
-      ? "Track commodity price trajectory, trade finance conditions, and logistics network stress. Secondary market contagion is the key indicator."
-      : "Monitor credit and commodity conditions for asymmetric shock potential. Conditions are within manageable parameters.";
+      ? "Track commodity price trajectory over 48–72 hours, trade finance stress indicators, and logistics network disruption. Secondary market contagion into credit and sovereign debt is the key risk indicator."
+      : "Monitor credit conditions and commodity pricing for asymmetric shock potential. Current parameters are within manageable range but sensitive to external triggers.";
   if (/Technology|Cyber|Infrastructure/.test(e.domain))
     return matrix.infrastructure !== "LOW"
-      ? "Track attribution, patch cycle response, critical advisories, and lateral spread. Infrastructure resilience metrics are the leading indicator of consequence severity."
-      : "Monitor vulnerability advisories on standard cadence. No acute threat confirmed at current posture.";
+      ? "Track attribution timeline, active patch cycle response rates, CISA and partner agency advisories, and lateral spread confirmation. Infrastructure resilience metrics are the leading indicator of consequence severity."
+      : "Monitor vulnerability advisories on standard cadence. No acute threat trajectory confirmed at current posture.";
   if (/Policy|Domestic|Governance/.test(e.domain))
     return matrix.information !== "LOW"
-      ? "Track near-term regulatory, legislative, and executive action confirming or reversing current trajectory. Institutional signals of this type typically precede material action within one to three cycles."
-      : "Monitor institutional stance for directional shifts. No confirmed action pathway at current posture.";
-  return "Monitor for trajectory confirmation and cross-domain transmission in the next cycle window.";
+      ? "Track near-term executive, legislative, and regulatory actions that confirm or reverse the current institutional trajectory. Signals of this type typically precede material action within one to three cycle windows."
+      : "Monitor for directional confirmation through executive action, legislative movement, or diplomatic communication. No confirmed action pathway at current posture.";
+  return "Monitor for a second independent confirming signal from a different source before adjusting posture assessment. Single-source signals remain unverified.";
 }
 
 function buildWatchpoint(e: FeedEvent, matrix: ThreatMatrix): string {
   if (/Security|Defense/.test(e.domain))
     return matrix.conflict !== "LOW"
-      ? "Confirming kinetic action, force repositioning, or partner nation response outside normal posture."
-      : "Any shift in deterrence posture, force deployment orders, or third-party involvement.";
+      ? "Confirming kinetic activity, force repositioning beyond declared exercises, or involvement of a third-party actor not previously in the picture."
+      : "Any shift in force deployment orders, deterrence signaling, or partner nation posture outside established pattern.";
   if (/Markets|Economy/.test(e.domain))
-    return "Sustained commodity price deviation, credit market stress, or trade corridor disruption exceeding 72-hour threshold.";
+    return "Sustained commodity price deviation exceeding 5% in 24 hours, credit spread widening, trade corridor disruption, or emergency central bank communication.";
   if (/Technology|Cyber|Infrastructure/.test(e.domain))
-    return "Attribution announcement, additional victim confirmation, or advisory upgrade from CISA/partner agencies.";
+    return "Attribution announcement, additional victim confirmation, or advisory upgrade from CISA, NSA, or partner agencies — any of which would confirm active threat trajectory.";
   if (/Policy|Domestic|Governance/.test(e.domain))
-    return "Executive order, legislative vote, diplomatic communiqué, or public statement confirming direction.";
+    return "Executive order, legislative vote result, diplomatic communiqué, or official public statement that confirms or reverses the institutional direction.";
   if (/Energy/.test(e.domain))
-    return "OPEC production decision, pipeline or terminal disruption, or energy corridor security incident.";
-  return "Any confirming signal from a second independent source within this or the next intelligence cycle.";
+    return "OPEC production decision change, pipeline or terminal disruption report, or energy corridor security incident that would constrain supply.";
+  return "Second independent confirming signal from a different source within this or the next intelligence cycle.";
 }
 
 function buildSignalBlock(e: FeedEvent, matrix: ThreatMatrix, counts: ReturnType<typeof clusterCounts>): string {
   const state = assessPressureState(e);
   const vector = inferPressureVector(e);
+  const tierLabel = e.sourceTier === 1 ? "TIER 1 — OFFICIAL" : e.sourceTier === 2 ? "TIER 2 — WIRE SERVICE" : e.sourceTier === 3 ? "TIER 3 — SPECIALIST" : "TIER 4 — UNVERIFIED";
+  const corrobNote = e.corroborated ? `  |  CORROBORATED (${e.sourceCount ?? "2"}+ sources)` : "";
 
   return [
-    `SIGNAL:          ${e.domain.toUpperCase()}  |  CONFIDENCE: ${e.confidence}/100  |  SEVERITY: ${"■".repeat(e.severity)}${"□".repeat(4 - e.severity)}`,
+    `SIGNAL:          ${e.domain.toUpperCase()}  |  ${tierLabel}${corrobNote}`,
+    `CONFIDENCE:      ${e.confidence}/100  |  SEVERITY: ${"■".repeat(e.severity)}${"□".repeat(4 - e.severity)}  |  SOURCE: ${e.source}`,
     `EVENT:           ${e.title}`,
     `CONTEXT:         ${buildContext(e)}`,
     `MECHANISM:       ${buildMechanism(e, matrix)}`,
@@ -381,7 +427,7 @@ function identifyPatternType(matrix: ThreatMatrix, counts: ReturnType<typeof clu
   };
   if (active === 2 && (matrix.overall === "HIGH" || matrix.overall === "CRITICAL")) return {
     type: "ESCALATION",
-    explanation: "Two active clusters are co-moving in an upward direction. The coupling between them is driving the overall posture higher. Escalation pattern requires active monitoring for cross-domain transmission and correlated risk scenarios.",
+    explanation: "Two active clusters are co-moving upward. The coupling between them is driving the overall posture higher. Escalation pattern requires active monitoring for cross-domain transmission and correlated risk scenarios.",
   };
   if (active >= 2 && matrix.overall === "ELEVATED") return {
     type: "CONVERGENCE",
@@ -389,7 +435,7 @@ function identifyPatternType(matrix: ThreatMatrix, counts: ReturnType<typeof clu
   };
   if (active === 0 && matrix.overall === "GUARDED") return {
     type: "STABILIZATION",
-    explanation: "Signal distribution is broad without concentration. No dominant cluster has formed. The environment is holding within baseline parameters — a stabilization pattern that rewards monitoring continuity over reactive adjustment.",
+    explanation: "Signal distribution is broad without concentration. No dominant cluster has formed. The environment is holding within baseline parameters — a stabilization pattern that rewards monitoring continuity over reactive posture adjustment.",
   };
   if (active === 0 && matrix.overall === "LOW") return {
     type: "STABILIZATION",
@@ -420,7 +466,7 @@ function buildExecutiveSummary(
 
   const topSignal = events[0];
   const topContext = topSignal
-    ? `The leading signal this cycle — ${topSignal.title} — reflects ${/Security|Defense/.test(topSignal.domain) ? "active pressure in the security domain" : /Markets|Economy/.test(topSignal.domain) ? "economic and market stress" : /Tech|Cyber|Infrastructure/.test(topSignal.domain) ? "technology and infrastructure exposure" : "institutional and policy movement"}.`
+    ? `The leading signal this cycle — ${topSignal.title} — reflects ${/Security|Defense/.test(topSignal.domain) ? "active pressure in the security domain" : /Markets|Economy/.test(topSignal.domain) ? "economic and market stress" : /Tech|Cyber|Infrastructure/.test(topSignal.domain) ? "technology and infrastructure exposure" : "institutional and policy movement"}. Source reliability: Tier ${topSignal.sourceTier ?? 4}.`
     : "";
 
   const postureLines: Record<string, string> = {
@@ -436,10 +482,12 @@ function buildExecutiveSummary(
   const coupling = activeDomains.length >= 2
     ? ` Cross-domain coupling is active between ${activeDomains.slice(0, 2).join(" and ")} — a configuration that compresses response lead time and increases systemic stress probability.`
     : activeDomains.length === 1
-    ? ` Primary pressure is concentrated in ${activeDomains[0]}. No significant cross-domain coupling is detected at this time.`
+    ? ` Primary pressure is concentrated in ${activeDomains[0]}. No significant cross-domain coupling detected at this time.`
     : ``;
 
-  const tail = ` ${topContext} This cycle processed ${events.length} signals at ${conf}/100 average confidence.`;
+  const corrobCount = events.filter(e => e.corroborated).length;
+  const corrobNote = corrobCount > 0 ? ` ${corrobCount} signal(s) confirmed by multiple independent sources.` : "";
+  const tail = ` ${topContext} This cycle processed ${events.length} signals at ${conf}/100 average confidence.${corrobNote}`;
 
   return `${posture}${coupling}${tail}`;
 }
@@ -453,7 +501,7 @@ export function buildEscalationModel(matrix: ThreatMatrix, confidence: number, s
     .filter(x => x === "HIGH" || x === "CRITICAL").length;
 
   const caveat = signalCount < 6
-    ? ` Note: Signal set is limited (${signalCount} items). Additional ingestion recommended before escalation decisions.`
+    ? ` Note: Signal set is limited (${signalCount} items). Additional ingestion recommended before adjusting posture.`
     : confidence < 72
     ? ` Note: Cycle confidence is below threshold (${confidence}/100). Treat assessment as directional, not definitive.`
     : "";
@@ -468,6 +516,121 @@ export function buildEscalationModel(matrix: ThreatMatrix, confidence: number, s
 }
 
 /* ═══════════════════════════════════════════════════════════
+   DATA TABLE BUILDERS
+═══════════════════════════════════════════════════════════ */
+
+function buildSignalIntakeTable(workingSet: FeedEvent[], primaryLimit: number, stats?: SignalPipelineStats): string {
+  const rows: string[] = [];
+  const pad = (s: string, n: number) => s.padEnd(n).slice(0, n);
+
+  if (stats) {
+    rows.push(`${pad("Raw collected (all feeds):", 40)}  ${String(stats.rawCount).padStart(6)}`);
+    rows.push(`${pad("Parsed (title + summary extracted):", 40)}  ${String(stats.parsedCount).padStart(6)}`);
+    rows.push(`${pad("Rejected (relevance / noise filter):", 40)}  ${String(stats.rejectedCount).padStart(6)}`);
+    rows.push(`${pad("Deduplicated (unique stories):", 40)}  ${String(stats.dedupCount).padStart(6)}`);
+    rows.push(`${pad("Usable (scored + ranked):", 40)}  ${String(stats.usableCount).padStart(6)}`);
+    rows.push(`${pad("Used in this brief:", 40)}  ${String(Math.min(primaryLimit + 8, workingSet.length)).padStart(6)}`);
+    rows.push(``);
+    rows.push(`${pad("Feeds attempted:", 40)}  ${String(stats.successFeeds + stats.failFeeds).padStart(6)}`);
+    rows.push(`${pad("Feeds successful:", 40)}  ${String(stats.successFeeds).padStart(6)}`);
+    rows.push(`${pad("Feeds failed / rejected:", 40)}  ${String(stats.failFeeds).padStart(6)}`);
+    rows.push(`${pad("Ingestion time:", 40)}  ${String((stats.elapsed / 1000).toFixed(1)).padStart(5)}s`);
+    rows.push(``);
+    if (Object.keys(stats.rejectionBreakdown).length > 0) {
+      rows.push(`REJECTION BREAKDOWN:`);
+      Object.entries(stats.rejectionBreakdown).sort((a, b) => b[1] - a[1]).forEach(([reason, count]) => {
+        rows.push(`  ${pad(reason + ":", 38)}  ${String(count).padStart(6)}`);
+      });
+    }
+  } else {
+    rows.push(`${pad("Signals processed:", 40)}  ${String(workingSet.length).padStart(6)}`);
+    rows.push(`${pad("Used in this brief:", 40)}  ${String(Math.min(primaryLimit + 8, workingSet.length)).padStart(6)}`);
+    rows.push(`Note: Pull signals to generate full intake pipeline statistics.`);
+  }
+
+  return rows.join("\n");
+}
+
+function buildSourceHealthTable(workingSet: FeedEvent[], stats?: SignalPipelineStats): string {
+  const rows: string[] = [];
+  const pad = (s: string, n: number) => s.padEnd(n).slice(0, n);
+
+  if (stats) {
+    const tier1 = workingSet.filter(e => e.sourceTier === 1).length;
+    const tier2 = workingSet.filter(e => e.sourceTier === 2).length;
+    const tier3 = workingSet.filter(e => e.sourceTier === 3).length;
+    const tier4 = workingSet.filter(e => e.sourceTier === 4).length;
+    const corrobCount = workingSet.filter(e => e.corroborated).length;
+
+    rows.push(`SOURCE TIER DISTRIBUTION (this brief):`);
+    rows.push(`  ${pad("Tier 1 — Official / Institutional:", 40)}  ${String(tier1).padStart(4)}`);
+    rows.push(`  ${pad("Tier 2 — Wire Service / Major News:", 40)}  ${String(tier2).padStart(4)}`);
+    rows.push(`  ${pad("Tier 3 — Specialist / Trade:", 40)}  ${String(tier3).padStart(4)}`);
+    rows.push(`  ${pad("Tier 4 — Unknown / Unverified:", 40)}  ${String(tier4).padStart(4)}`);
+    rows.push(`  ${pad("Corroborated (2+ independent sources):", 40)}  ${String(corrobCount).padStart(4)}`);
+    rows.push(``);
+
+    if (stats.topDomains.length > 0) {
+      rows.push(`TOP SIGNAL DOMAINS:`);
+      stats.topDomains.slice(0, 6).forEach(d => {
+        rows.push(`  ${pad(d.domain + ":", 40)}  ${String(d.count).padStart(4)} signals`);
+      });
+    }
+    if (stats.weakDomains.length > 0) {
+      rows.push(``);
+      rows.push(`WEAK COVERAGE DOMAINS (< 3 signals):`);
+      rows.push(`  ${stats.weakDomains.join(", ")}`);
+    }
+  } else {
+    rows.push(`Source health data available after live signal pull.`);
+    const tier1 = workingSet.filter(e => (e.sourceTier ?? 4) === 1).length;
+    const tier2 = workingSet.filter(e => (e.sourceTier ?? 4) === 2).length;
+    const tier3 = workingSet.filter(e => (e.sourceTier ?? 4) === 3).length;
+    const tier4 = workingSet.filter(e => (e.sourceTier ?? 4) === 4).length;
+    rows.push(`Tier 1: ${tier1}  |  Tier 2: ${tier2}  |  Tier 3: ${tier3}  |  Tier 4: ${tier4}`);
+  }
+
+  return rows.join("\n");
+}
+
+function buildConfidenceDistribution(workingSet: FeedEvent[]): string {
+  const confirmed = workingSet.filter(e => e.confidence >= 88);
+  const likely = workingSet.filter(e => e.confidence >= 78 && e.confidence < 88);
+  const contested = workingSet.filter(e => e.confidence >= 68 && e.confidence < 78);
+  const unknown = workingSet.filter(e => e.confidence < 68);
+
+  const pad = (s: string, n: number) => s.padEnd(n).slice(0, n);
+  return [
+    `${pad("CONFIRMED  (≥88%):", 30)}  ${String(confirmed.length).padStart(4)}  (${((confirmed.length / Math.max(1, workingSet.length)) * 100).toFixed(0)}%)`,
+    `${pad("LIKELY     (78–87%):", 30)}  ${String(likely.length).padStart(4)}  (${((likely.length / Math.max(1, workingSet.length)) * 100).toFixed(0)}%)`,
+    `${pad("CONTESTED  (68–77%):", 30)}  ${String(contested.length).padStart(4)}  (${((contested.length / Math.max(1, workingSet.length)) * 100).toFixed(0)}%)`,
+    `${pad("UNKNOWN    (<68%):", 30)}  ${String(unknown.length).padStart(4)}  (${((unknown.length / Math.max(1, workingSet.length)) * 100).toFixed(0)}%)`,
+  ].join("\n");
+}
+
+function buildPressureVectorTable(events: FeedEvent[]): string {
+  const vectors: Record<string, { count: number; intensity: string }> = {};
+  events.forEach(e => {
+    const v = inferPressureVector(e);
+    const state = assessPressureState(e);
+    const intensity = state === "BUILDING" ? "HIGH" : state === "TRANSFERRING" ? "ELEVATED" : state === "FRAGMENTED" ? "FRAGMENTED" : "MODERATE";
+    if (!vectors[v]) vectors[v] = { count: 0, intensity };
+    vectors[v].count++;
+    if (intensity === "HIGH" && vectors[v].intensity !== "HIGH") vectors[v].intensity = "HIGH";
+  });
+
+  const sorted = Object.entries(vectors).sort((a, b) => b[1].count - a[1].count).slice(0, 8);
+  const pad = (s: string, n: number) => s.padEnd(n).slice(0, n);
+
+  if (sorted.length === 0) return "No pressure vectors identified in current signal set.";
+
+  return sorted.map(([vector, data]) => {
+    const [src, tgt] = vector.split("→").map(s => s.trim());
+    return `${pad(src ?? vector, 30)}  →  ${pad(tgt ?? "N/A", 30)}  ${pad(data.intensity, 12)}  ${data.count} signals`;
+  }).join("\n");
+}
+
+/* ═══════════════════════════════════════════════════════════
    FULL BRIEF — 14-SECTION STRUCTURE
 ═══════════════════════════════════════════════════════════ */
 
@@ -477,7 +640,8 @@ export function buildFullBrief(
   patterns: string[],
   mode: string,
   depth: "full" | "quick",
-  now: Date = new Date()
+  now: Date = new Date(),
+  stats?: SignalPipelineStats
 ): string {
   const { date, time } = getBrowserDateTimeParts(now);
   const location = getLocation();
@@ -493,6 +657,7 @@ export function buildFullBrief(
   const signalLimit = depth === "quick" ? 6 : mode === "weekly" ? 25 : mode === "full" ? 40 : 15;
   const primaryLimit = depth === "quick" ? 3 : mode === "full" ? 7 : 5;
   const workingSet = sourceSet.slice(0, signalLimit);
+  const corrobCount = workingSet.filter(e => e.corroborated).length;
 
   const header = [
     "FROM THE OFFICE OF EXECUTIVE INTELLIGENCE",
@@ -503,12 +668,11 @@ export function buildFullBrief(
     `INTELLIGENCE CYCLE: ${cycleLabel}`,
     `SIGNALS PROCESSED: ${workingSet.length}`,
     `CYCLE CONFIDENCE: ${conf}/100`,
-    "",
-  ].join("\n");
+    corrobCount > 0 ? `CORROBORATED SIGNALS: ${corrobCount}` : "",
+    stats ? `PIPELINE: ${stats.rawCount} raw → ${stats.parsedCount} parsed → ${stats.rejectedCount} rejected → ${stats.usableCount} usable` : "",
+  ].filter(Boolean).join("\n");
 
   const div = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
-
-  /* ── Sections shared across modes ── */
 
   /* §1 Executive Overview */
   const s1 = buildExecutiveSummary(workingSet, matrix, counts, conf);
@@ -525,23 +689,24 @@ export function buildFullBrief(
     `Cycle Confidence:               ${conf}/100`,
   ].join("\n");
 
-  /* §3 Data Summary */
-  const confirmed = workingSet.filter(e => e.confidence >= 88).length;
-  const likely = workingSet.filter(e => e.confidence >= 78 && e.confidence < 88).length;
-  const contested = workingSet.filter(e => e.confidence >= 68 && e.confidence < 78).length;
-  const unknown = workingSet.filter(e => e.confidence < 68).length;
+  /* §3 Data Summary — full intake pipeline + source health + confidence distribution */
   const avgThreat = workingSet.length
     ? Math.round(workingSet.reduce((s, e) => s + (e.severity * 22.5), 0) / workingSet.length)
     : 0;
   const domainSet = [...new Set(workingSet.map(e => e.domain))].join(", ");
+
   const s3 = [
-    `Signals Processed:    ${workingSet.length}`,
-    `Signals Used:         ${Math.min(primaryLimit + 5, workingSet.length)}`,
-    `Confirmed (≥88%):     ${confirmed}`,
-    `Likely (78–87%):      ${likely}`,
-    `Contested (68–77%):   ${contested}`,
-    `Unknown (<68%):       ${unknown}`,
-    `Domain Distribution:  ${domainSet || "N/A"}`,
+    `── SIGNAL INTAKE PIPELINE ──────────────────────────────────────────────────`,
+    buildSignalIntakeTable(workingSet, primaryLimit, stats),
+    ``,
+    `── SOURCE RELIABILITY ──────────────────────────────────────────────────────`,
+    buildSourceHealthTable(workingSet, stats),
+    ``,
+    `── CONFIDENCE DISTRIBUTION ─────────────────────────────────────────────────`,
+    buildConfidenceDistribution(workingSet),
+    ``,
+    `── DOMAIN + METRIC SUMMARY ──────────────────────────────────────────────────`,
+    `Domain Coverage:      ${domainSet || "N/A"}`,
     `Average Confidence:   ${conf}/100`,
     `Average Threat Score: ${avgThreat}/100`,
     `Top Pressure Domain:  ${workingSet[0]?.domain || "N/A"}`,
@@ -560,13 +725,17 @@ export function buildFullBrief(
     : "No primary signals identified with sufficient confidence in this cycle.";
 
   /* §6 Signal Matrix — grouped by confidence tier */
-  const matrixConfirmed = workingSet.filter(e => e.confidence >= 88).slice(0, 8);
-  const matrixLikely = workingSet.filter(e => e.confidence >= 78 && e.confidence < 88).slice(0, 8);
-  const matrixContested = workingSet.filter(e => e.confidence < 78).slice(0, 8);
+  const matrixConfirmed = workingSet.filter(e => e.confidence >= 88).slice(0, 10);
+  const matrixLikely = workingSet.filter(e => e.confidence >= 78 && e.confidence < 88).slice(0, 10);
+  const matrixContested = workingSet.filter(e => e.confidence < 78).slice(0, 10);
 
   const renderMatrixGroup = (label: string, items: FeedEvent[]) => {
     if (!items.length) return `${label}\n  None at this confidence tier.`;
-    const rows = items.map(e => `  [${e.domain}] ${e.title} — ${e.confidence}/100`);
+    const rows = items.map(e => {
+      const tierLabel = e.sourceTier ? `T${e.sourceTier}` : "T?";
+      const corrobLabel = e.corroborated ? " ◆" : "";
+      return `  [${e.domain}] [${tierLabel}${corrobLabel}] ${e.title} — ${e.confidence}/100`;
+    });
     return `${label}\n${rows.join("\n")}`;
   };
 
@@ -576,6 +745,8 @@ export function buildFullBrief(
     renderMatrixGroup("LIKELY (78–87%)", matrixLikely),
     "",
     renderMatrixGroup("CONTESTED / UNKNOWN (<78%)", matrixContested),
+    "",
+    `◆ = Corroborated by 2+ independent sources   T1=Official T2=Wire T3=Specialist T4=Unverified`,
   ].join("\n");
 
   /* §7 System Mechanics */
@@ -588,34 +759,34 @@ export function buildFullBrief(
 
   const s7Lines: string[] = [];
   if (matrix.conflict !== "LOW")
-    s7Lines.push(`CONFLICT MECHANICS: Security-domain signals are driving deterrence calculations and partner nation posturing. Escalation probability is non-trivial — force positioning and capability deployments are the key leading indicators.`);
+    s7Lines.push(`CONFLICT MECHANICS: Security-domain signals are driving deterrence calculations and partner nation posturing. Escalation probability is non-trivial — force positioning and capability deployments are the key leading indicators. Decision makers in this posture should not wait for kinetic confirmation before positioning.`);
   if (matrix.markets !== "LOW")
-    s7Lines.push(`MARKET MECHANICS: Economic and energy signals are reshaping trade corridor conditions, commodity pricing, and credit availability. Downstream effects on manufacturing, logistics, and sovereign debt are the transmission channels.`);
+    s7Lines.push(`MARKET MECHANICS: Economic and energy signals are reshaping trade corridor conditions, commodity pricing, and credit availability. Downstream effects on manufacturing, logistics, and sovereign debt are the primary transmission channels — typically lagging the initial signal by 24–72 hours.`);
   if (matrix.infrastructure !== "LOW")
-    s7Lines.push(`INFRASTRUCTURE MECHANICS: Technology and infrastructure signals are active. Adversarial actors may be probing for vulnerability. Cascade failure potential is elevated when interdependent systems are under simultaneous pressure.`);
+    s7Lines.push(`INFRASTRUCTURE MECHANICS: Technology and infrastructure signals are active. Adversarial actors may be probing for exploitable vulnerability. Cascade failure potential is elevated when interdependent systems face simultaneous pressure — the interconnection creates the consequence, not the individual event.`);
   if (matrix.information !== "LOW")
-    s7Lines.push(`POLICY MECHANICS: Institutional signals indicate the regulatory and diplomatic environment is being actively reshaped. Organizations in policy-sensitive sectors should anticipate near-term changes to operating conditions.`);
+    s7Lines.push(`POLICY MECHANICS: Institutional signals indicate the regulatory and diplomatic environment is being actively reshaped. Organizations in policy-sensitive sectors should anticipate near-term changes to operating conditions within one to three cycle windows.`);
   if (s7Lines.length === 0)
-    s7Lines.push(`No primary system mechanics are elevated this cycle. Background processes are operating within normal range. Maintain standard monitoring for emergent triggers.`);
+    s7Lines.push(`No primary system mechanics are elevated this cycle. Background processes are operating within normal range. Maintain standard monitoring cadence and prepare scenario templates for rapid activation if conditions change.`);
   const s7 = s7Lines.join("\n\n");
 
   /* §8 System Intersection */
   const s8Lines: string[] = [];
   if (matrix.conflict !== "LOW" && matrix.markets !== "LOW")
-    s8Lines.push(`SECURITY × ECONOMIC COUPLING: When security and market signals co-move, the risk is not additive — it introduces a volatility multiplier that reduces the effectiveness of single-domain response strategies. Energy and logistics corridors are the primary transmission channels.`);
+    s8Lines.push(`SECURITY × ECONOMIC COUPLING: When security and market signals co-move, the risk is not additive — it introduces a volatility multiplier that reduces the effectiveness of single-domain response strategies. Energy and logistics corridors are the primary transmission channels; disruption in one amplifies the other.`);
   if (matrix.markets !== "LOW" && matrix.infrastructure !== "LOW")
-    s8Lines.push(`ECONOMIC × INFRASTRUCTURE COUPLING: Market and infrastructure signals are intersecting through logistics networks, energy systems, and technology dependency chains. Disruption originating in either domain propagates into the other with reduced friction.`);
+    s8Lines.push(`ECONOMIC × INFRASTRUCTURE COUPLING: Market and infrastructure signals are intersecting through logistics networks, energy systems, and technology dependency chains. Disruption originating in either domain propagates into the other with reduced friction and compressed warning time.`);
   if (matrix.information !== "LOW" && matrix.conflict !== "LOW")
-    s8Lines.push(`POLICY × SECURITY COUPLING: Diplomatic and institutional signals are reinforcing the security picture. Policy decisions in this configuration frequently precede kinetic or economic escalation within one to three cycles.`);
+    s8Lines.push(`POLICY × SECURITY COUPLING: Diplomatic and institutional signals are reinforcing the security picture. Policy decisions in this configuration frequently precede or accompany kinetic or economic escalation within one to three cycles — the institutional signal is the leading edge, not a lagging indicator.`);
   if (matrix.infrastructure !== "LOW" && matrix.information !== "LOW")
-    s8Lines.push(`TECHNOLOGY × POLICY COUPLING: AI, semiconductor, and cyber signals are generating regulatory pressure as governments respond to technology risk. This coupling compresses both the threat and the response within the same cycle window.`);
+    s8Lines.push(`TECHNOLOGY × POLICY COUPLING: AI, semiconductor, and cyber signals are generating regulatory pressure as governments respond to technology risk simultaneously with adversarial exploitation. This coupling compresses both the threat and the response within the same cycle window.`);
   if (s8Lines.length === 0)
-    s8Lines.push(`No significant cross-domain coupling is confirmed this cycle. Signals are operating within their respective domain boundaries. Monitor for coupling triggers in the next cycle window.`);
+    s8Lines.push(`No significant cross-domain coupling confirmed this cycle. Signals are operating within their respective domain boundaries. Monitor for coupling triggers — they typically appear as correlated signals from two domains within the same 24-hour window.`);
   const s8 = s8Lines.join("\n\n");
 
-  /* §9 Pressure Map */
-  const building = workingSet.filter(e => assessPressureState(e) === "BUILDING").slice(0, 4);
-  const transferring = workingSet.filter(e => assessPressureState(e) === "TRANSFERRING").slice(0, 4);
+  /* §9 Pressure Map + Vector Table */
+  const building = workingSet.filter(e => assessPressureState(e) === "BUILDING").slice(0, 5);
+  const transferring = workingSet.filter(e => assessPressureState(e) === "TRANSFERRING").slice(0, 5);
   const releasing = workingSet.filter(e => assessPressureState(e) === "RELEASING").slice(0, 3);
 
   const s9 = [
@@ -627,24 +798,27 @@ export function buildFullBrief(
     ``,
     `PRESSURE RELEASING:`,
     releasing.length ? releasing.map(e => `  • [${e.domain}] ${e.title}`).join("\n") : "  None confirmed.",
+    ``,
+    `PRESSURE VECTOR TABLE (Source Domain → Target Domain → Intensity):`,
+    buildPressureVectorTable(workingSet),
   ].join("\n");
 
   /* §10 Constraints */
   const s10Lines: string[] = [];
-  if (matrix.conflict !== "LOW") s10Lines.push(`• Diplomatic constraints: Active back-channel negotiations or third-party mediation could slow escalation velocity if mutual incentives for de-escalation materialize.`);
-  if (matrix.markets !== "LOW") s10Lines.push(`• Market constraints: Central bank intervention, emergency reserve releases, or coordinated sovereign action could stabilize commodity and credit conditions within 48–72 hours.`);
-  if (matrix.infrastructure !== "LOW") s10Lines.push(`• Technical constraints: Patch cycles, system redundancy, and incident response protocols can limit the blast radius of infrastructure events — if activated before cascade.`);
-  if (matrix.information !== "LOW") s10Lines.push(`• Institutional constraints: Legislative timelines, judicial review, and inter-agency coordination create natural lag before policy signals materialize into operational changes.`);
-  if (s10Lines.length === 0) s10Lines.push(`• No significant constraints on current trajectories identified. Monitor for catalysts that could rapidly shift the operating picture.`);
+  if (matrix.conflict !== "LOW") s10Lines.push(`• Diplomatic constraints: Active back-channel negotiations or third-party mediation could reduce escalation velocity if mutual incentives for de-escalation materialize. Economic costs of continued escalation serve as the primary natural brake.`);
+  if (matrix.markets !== "LOW") s10Lines.push(`• Market constraints: Central bank intervention, emergency reserve releases, or coordinated sovereign action could stabilize commodity and credit conditions within 48–72 hours — assuming institutional credibility remains intact.`);
+  if (matrix.infrastructure !== "LOW") s10Lines.push(`• Technical constraints: Patch cycles, system redundancy, and incident response protocols can limit the blast radius of infrastructure events — but only if activated before cascade conditions develop.`);
+  if (matrix.information !== "LOW") s10Lines.push(`• Institutional constraints: Legislative timelines, judicial review processes, and inter-agency coordination create natural lag before policy signals materialize into operational changes — typically 30–90 days in normal conditions.`);
+  if (s10Lines.length === 0) s10Lines.push(`• No significant constraints on current trajectories identified. Monitor for catalysts that could rapidly shift the operating picture without warning.`);
   const s10 = s10Lines.join("\n");
 
   /* §11 Forward Projection */
   const continuationPath = `Direction of travel is ${matrix.overall.toLowerCase()}. If current signal volumes and domain pressures persist without escalation, the operating environment remains within manageable parameters over the next 24–72 hours.`;
   const escalationPath = matrix.overall === "HIGH" || matrix.overall === "CRITICAL"
-    ? `A confirming signal in the ${activeClusters[0] || "primary domain"} — particularly one involving a second independent actor — would trigger a posture upgrade. This path compresses decision lead time significantly.`
-    : `Escalation would require a high-severity confirming event in the leading domain plus evidence of cross-domain coupling. Probability: ${counts.conflict > 3 || counts.markets > 3 ? "MODERATE" : "LOW"} at current signal set.`;
+    ? `A confirming signal in the ${activeClusters[0] || "primary domain"} — particularly one involving a second independent actor or a third-party response — would trigger a posture upgrade. This path compresses decision lead time significantly.`
+    : `Escalation requires a high-severity confirming event in the leading domain plus evidence of cross-domain coupling. Probability: ${counts.conflict > 3 || counts.markets > 3 ? "MODERATE" : "LOW"} at current signal set.`;
   const stabilizationPath = `De-escalation requires confirming signals from at least two independent domains simultaneously — diplomatic resolution, market stabilization, or institutional accommodation. Probability: ${matrix.overall === "GUARDED" || matrix.overall === "LOW" ? "HIGH" : "MODERATE"}.`;
-  const failurePath = `Failure scenario: Multiple concurrent high-severity events overwhelm analytical resources and response capacity. Indicators would include three or more simultaneous domain escalations within a single cycle window.`;
+  const failurePath = `Failure scenario: Multiple concurrent high-severity events overwhelm analytical resources and response capacity. Indicators would include three or more simultaneous domain escalations within a single cycle window — watch for this configuration specifically.`;
 
   const s11 = [
     `CONTINUATION PATH: ${continuationPath}`,
@@ -659,15 +833,15 @@ export function buildFullBrief(
   /* §12 Operator Takeaway */
   const s12 = (() => {
     if (matrix.overall === "CRITICAL") return `The environment is at CRITICAL. Compounding systemic risk across multiple domains warrants immediate executive-level attention and active contingency management. Passive monitoring is insufficient — this is an active management environment.`;
-    if (matrix.overall === "HIGH") return `The environment is at HIGH. Multi-domain pressure is active and secondary transmission is plausible. Elevate readiness posture, initiate contingency review, and do not wait for confirmation before positioning.`;
-    if (matrix.overall === "ELEVATED") return `The environment is ELEVATED. Pressure in ${activeClusters[0] || "at least one domain"} warrants increased monitoring cadence. Direction of travel matters more than current position. Anticipate rather than react.`;
-    if (matrix.overall === "GUARDED") return `The environment is GUARDED. Background tension is present but within manageable range. Maintain monitoring continuity and signal discipline. Complacency during guarded periods is the primary analytical failure mode.`;
-    return `The environment is LOW. No acute threat cluster has formed. Maintain standard monitoring. Quiet periods are the optimal window for signal infrastructure maintenance and scenario preparation.`;
+    if (matrix.overall === "HIGH") return `The environment is at HIGH. Multi-domain pressure is active and secondary transmission is plausible within the current cycle window. Elevate readiness posture, initiate contingency review, and do not wait for confirmation before repositioning.`;
+    if (matrix.overall === "ELEVATED") return `The environment is ELEVATED. Pressure in ${activeClusters[0] || "at least one domain"} warrants increased monitoring cadence and scenario review. Direction of travel matters more than current position — anticipate, do not react.`;
+    if (matrix.overall === "GUARDED") return `The environment is GUARDED. Background tension is present but within manageable range. Maintain monitoring continuity and signal discipline. Complacency during guarded periods is the primary analytical failure mode — this is when emergent threats develop their first legs.`;
+    return `The environment is LOW. No acute threat cluster has formed. Maintain standard monitoring cadence. Quiet periods are the optimal window for signal infrastructure maintenance and scenario preparation.`;
   })();
 
   /* §13 Watchpoints */
   const watchItems = [
-    matrix.conflict !== "LOW" && `• CONFLICT: Escalation velocity, geographic spread, partner nation force movements, and any kinetic activity outside established patterns.`,
+    matrix.conflict !== "LOW" && `• CONFLICT: Escalation velocity, geographic spread, partner nation force movements, and kinetic activity outside established patterns.`,
     matrix.markets !== "LOW" && `• MARKETS: Commodity price deviation >5% in 24h, credit spread widening, trade corridor disruption, or emergency central bank communication.`,
     matrix.infrastructure !== "LOW" && `• INFRASTRUCTURE: Critical system advisories from CISA/partner agencies, lateral spread confirmation, or attribution announcement for active incidents.`,
     matrix.information !== "LOW" && `• POLICY: Executive orders, legislative votes, diplomatic communiqués, or public statements confirming or reversing institutional signaling.`,
@@ -675,7 +849,7 @@ export function buildFullBrief(
     `• NEXT CYCLE: Prioritize signals from ${workingSet[0]?.source || "primary sources"} and monitor ${activeClusters[0] || "all domains"} for trajectory confirmation.`,
   ].filter(Boolean).join("\n");
 
-  /* §14 Appendix */
+  /* §14 Appendix — Supporting Signals by Domain */
   const appendixSignals = workingSet.slice(primaryLimit);
   const appendixByDomain: Record<string, FeedEvent[]> = {};
   appendixSignals.forEach(e => {
@@ -683,8 +857,12 @@ export function buildFullBrief(
     appendixByDomain[e.domain].push(e);
   });
   const s14 = Object.entries(appendixByDomain).length > 0
-    ? Object.entries(appendixByDomain).map(([domain, items]) => {
-        const rows = items.map(e => `  [${e.confidence}%] ${e.title}`);
+    ? Object.entries(appendixByDomain).sort((a, b) => b[1].length - a[1].length).map(([domain, items]) => {
+        const rows = items.map(e => {
+          const tierLabel = e.sourceTier ? `T${e.sourceTier}` : "T?";
+          const corrobLabel = e.corroborated ? " ◆" : "";
+          return `  [${e.confidence}%][${tierLabel}${corrobLabel}] ${e.title}`;
+        });
         return `${domain.toUpperCase()}\n${rows.join("\n")}`;
       }).join("\n\n")
     : "No additional signals beyond primary set.";
@@ -692,7 +870,7 @@ export function buildFullBrief(
   /* ── QUICK BRIEF ── */
   if (depth === "quick") {
     const compact = workingSet.slice(0, 5).map((e, i) =>
-      `${i + 1}. [${e.domain}] ${e.title}\n   Confidence: ${e.confidence}/100  |  Severity: ${"■".repeat(e.severity)}${"□".repeat(4 - e.severity)}  |  Pressure: ${assessPressureState(e)}`
+      `${i + 1}. [${e.domain}] ${e.title}\n   Source: ${e.source} (Tier ${e.sourceTier ?? "?"})\n   Confidence: ${e.confidence}/100  |  Severity: ${"■".repeat(e.severity)}${"□".repeat(4 - e.severity)}  |  Pressure: ${assessPressureState(e)}`
     ).join("\n\n");
 
     return [
@@ -712,7 +890,7 @@ export function buildFullBrief(
 
   /* ── FULL / DAILY / WEEKLY BRIEF ── */
   const insufficientSignal = workingSet.length < 8
-    ? `\nNote: Signal density was insufficient for full-length expansion without degrading analytic quality. Assessment reflects available signals only.`
+    ? `\nNote: Signal density was insufficient for full-length expansion without degrading analytic quality. Assessment reflects ${workingSet.length} available signals — additional ingestion recommended.`
     : "";
 
   const patternSection = [
@@ -726,7 +904,7 @@ export function buildFullBrief(
       ? `Active co-elevation across ${activeClusters.slice(0, 2).join(" and ")} — cross-cluster transmission is where consequential risk is most likely to develop.`
       : activeClusters.length === 1
       ? `Pressure concentrated in ${activeClusters[0]}. No cross-cluster coupling detected at this time.`
-      : `Signals distributed across domains without dominant concentration. Breadth-over-focus conditions can mask cumulative pressure.`,
+      : `Signals distributed across domains without dominant concentration. Breadth-over-focus conditions can mask cumulative pressure that does not yet appear systemic.`,
   ].join("\n");
 
   return [
@@ -741,7 +919,7 @@ export function buildFullBrief(
     ``, div, `§6  SIGNAL MATRIX BY CONFIDENCE`, div, s6,
     ``, div, `§7  SYSTEM MECHANICS`, div, s7,
     ``, div, `§8  SYSTEM INTERSECTION`, div, s8,
-    ``, div, `§9  PRESSURE MAP`, div, s9,
+    ``, div, `§9  PRESSURE MAP + VECTOR TABLE`, div, s9,
     ``, div, `§10 CONSTRAINTS`, div, s10,
     ``, div, `§11 FORWARD PROJECTION`, div, s11,
     ``, div, `§12 OPERATOR TAKEAWAY`, div, s12,
@@ -775,62 +953,72 @@ export function buildArticle(
     counts.information > 2 && "policy",
   ].filter(Boolean) as string[];
 
-  const subhead = activeDomains.length >= 2
-    ? `${activeDomains.slice(0, 2).map(d => d[0].toUpperCase() + d.slice(1)).join(" and ")} pressures intersect as the ${cycleLabel.toLowerCase()} reflects a ${matrix.overall.toLowerCase()} posture.`
-    : `AXION assesses the ${date} intelligence cycle at ${matrix.overall} across ${events.length} processed signals.`;
+  const tier2Plus = events.filter(e => (e.sourceTier ?? 4) <= 2);
+  const sourceNote = tier2Plus.length > 0
+    ? `${tier2Plus.length} of ${events.length} signals sourced from Tier 1 or Tier 2 outlets.`
+    : `${events.length} signals processed. Additional Tier 1/2 sources would strengthen analytic confidence.`;
 
-  const opening = `The RSR AXION ${cycleLabel.toLowerCase()} for ${date} reflects an operating environment assessed at ${matrix.overall}. Processing ${events.length} signals at ${conf}/100 cycle confidence, the dominant signal character is ${matrix.conflict !== "LOW" ? "kinetic and defense-related" : matrix.markets !== "LOW" ? "economic and energy" : matrix.infrastructure !== "LOW" ? "infrastructure and technology" : "broadly distributed"}. ${counts.conflict > 2 && counts.markets > 2 ? "Security and market signals are co-moving — a configuration that reduces predictive certainty and increases correlated risk probability." : counts.conflict > 2 ? "Security and defense signals are the dominant cycle driver. Active tension in at least one conflict-adjacent theater carries potential for economic and logistics transmission." : counts.markets > 2 ? "Economic and energy signals are the leading cycle driver. Market dynamics are shaping the posture assessment more than any kinetic development." : "Signals are distributed across domains without a dominant cluster — characteristic of a transitional or accumulation phase."}`;
+  const openPara = `${cycleLabel}: RSR AXION synthesized ${events.length} signals across ${activeDomains.length || "multiple"} domain clusters at ${conf}/100 average confidence. ${lead ? `The cycle is led by a ${lead.domain} signal: ${lead.title}.` : "No single dominant signal is leading the cycle."} ${sourceNote}`;
 
-  const background = `RSR AXION synthesizes open-source intelligence from verified public sources spanning defense, economics, technology, international affairs, and policy. The system applies multi-factor domain classification, severity scoring, confidence weighting, and cross-cluster correlation to produce structured assessments calibrated for executive decision-support. The posture model operates across four primary domains — Conflict/Security, Markets/Energy, Infrastructure/Technology, and Policy/Information — and derives an overall assessment from their interaction. This output reflects the state of the environment at time of synthesis.`;
+  const bgPara = (() => {
+    if (matrix.conflict !== "LOW") return `The security domain enters this cycle with elevated cluster pressure. Conflict-adjacent signals are tracking force positioning, diplomatic communication, and economic measures that often precede or accompany kinetic events.`;
+    if (matrix.markets !== "LOW") return `Market and energy signals are leading this cycle. Commodity pricing, trade corridor conditions, and credit availability are the primary channels through which current developments will transmit into operational impact.`;
+    if (matrix.infrastructure !== "LOW") return `Technology and infrastructure signals are elevated. The current cycle reflects active adversarial probing and dependency exposure that represents a disproportionate risk relative to visible indicator volume.`;
+    return `Background conditions are within manageable parameters. The cycle reflects a monitoring environment without acute cluster pressure — the primary task is to identify emergent signals before they develop cluster characteristics.`;
+  })();
 
-  const developments = events.slice(0, 8).map((e, i) => {
-    const ctx = e.summary ? e.summary.slice(0, 160) : "No additional context available from source.";
-    const why = buildWhyItMatters(e, matrix);
-    return `${i + 1}. [${e.domain}]  Confidence: ${e.confidence}/100\n   Signal: ${e.title}\n   Context: ${ctx}\n   Significance: ${why.slice(0, 140)}`;
-  }).join("\n\n") || "No primary developments identified in this cycle.";
+  const devPara = events.slice(0, 4).map((e, i) =>
+    `${i + 1}. [${e.domain}] ${e.title} (${e.source}, Tier ${e.sourceTier ?? "?"}, ${e.confidence}/100)`
+  ).join("\n");
 
-  const mechanism = `The ${date} cycle is characterized by a ${matrix.overall.toLowerCase()} posture with ${activeDomains.length >= 2 ? `demonstrable coupling between the ${activeDomains.join(" and ")} domains` : activeDomains.length === 1 ? `primary pressure concentration in the ${activeDomains[0]} domain` : `signals distributed without dominant coupling`}. ${matrix.overall === "CRITICAL" ? "At CRITICAL posture, this is an active management environment. Signal convergence across multiple domains indicates structural stress — the coupling itself is a risk factor." : matrix.overall === "HIGH" ? "At HIGH posture, cross-domain pressure is generating secondary effects. A disruption in one domain transmits into adjacent systems with reduced friction." : matrix.overall === "ELEVATED" ? "At ELEVATED posture, the cycle is actively developing. Anticipatory positioning and disciplined monitoring can meaningfully reduce exposure to consequential surprise." : "The GUARDED posture reflects an environment where normal background tension is present without acute escalation. The primary risk is analytical drift during quiet periods."} Conflict: ${matrix.conflict}. Economic stress: ${matrix.markets}. Infrastructure: ${matrix.infrastructure}. Policy pressure: ${matrix.information}.`;
+  const mechPara = (() => {
+    if (matrix.conflict !== "LOW" && matrix.markets !== "LOW") return "Security and economic signals are co-moving — a configuration that introduces a volatility multiplier. Energy and logistics corridors are the primary transmission channel between these domains. Disruption in one propagates into the other faster than single-domain models predict.";
+    if (activeDomains[0]) return `The leading mechanism in this cycle operates through the ${activeDomains[0]} domain. Pressure originating here transmits into adjacent systems through dependency chains, pricing effects, and institutional responses — typically within 24 to 72 hours of the originating event.`;
+    return "The current cycle shows distributed signal activity without dominant cross-domain transmission. Individual domain mechanisms are operating independently — assess each on its own terms before looking for compounding effects.";
+  })();
 
-  const implications = matrix.conflict !== "LOW" && matrix.markets !== "LOW"
-    ? `The intersection of security and economic pressure represents a high-consequence configuration. Conflict-driven market shocks, supply chain fragility under geopolitical stress, and energy corridor vulnerability are active risk pathways. The coupling is not additive — it introduces a volatility multiplier that reduces the effectiveness of single-domain response strategies.`
-    : matrix.infrastructure !== "LOW"
-    ? `Infrastructure and technology vulnerabilities carry a disproportionate consequence profile. Individual signals may appear bounded in scope, but cascading failures are possible from limited initial events. Proactive hardening assessments and resilience review are warranted in all technology-dependent environments.`
-    : matrix.information !== "LOW"
-    ? `Policy and institutional signals indicate the regulatory and diplomatic environment is actively being reshaped. Organizations in policy-sensitive sectors — energy, finance, defense, technology — should monitor for near-term executive or legislative action. Institutional signaling of this type frequently precedes formal action within one to three cycles.`
-    : `The current cycle operates within normal parameters. No systemic amplification pathway is indicated. Standard protocols are appropriate. The primary risk at GUARDED is analytical drift — signal discipline erodes during quiet periods and can leave organizations unprepared for rapid environment shifts.`;
+  const implPara = (() => {
+    if (matrix.overall === "CRITICAL") return "Cross-domain compounding is active. The implication set extends beyond any single domain — organizations should review contingency plans, validate supply chain resilience, and assess exposure to the specific geographies and sectors showing the highest signal concentration.";
+    if (matrix.overall === "HIGH") return "Multi-domain pressure is active. Organizations with exposure to security-sensitive markets, energy corridors, or technology infrastructure should assess current exposure and available response options before conditions deteriorate further.";
+    if (matrix.overall === "ELEVATED") return "Developing pressure in at least one domain creates real but manageable implication exposure. The strategic question is whether current positioning will hold if pressure continues to build over the next one to three cycles.";
+    return "Implications remain within manageable bounds. The current environment rewards monitoring continuity over reactive adjustment — the value of this cycle is in the early warning posture, not the immediate implication profile.";
+  })();
 
-  const watchItems = [
-    matrix.conflict !== "LOW" && "conflict-domain escalation velocity, geographic spread, and partner nation responses",
-    matrix.markets !== "LOW" && "energy pricing trajectories, trade finance conditions, and logistics network stress",
-    matrix.infrastructure !== "LOW" && "cyber threat attribution, critical system advisories, and infrastructure resilience metrics",
-    matrix.information !== "LOW" && "legislative, executive, and diplomatic signaling for directional confirmation or reversal",
-  ].filter(Boolean) as string[];
+  const outlookPara = (() => {
+    const next = matrix.overall === "CRITICAL" ? "confirm containment or identify compounding vectors"
+      : matrix.overall === "HIGH" ? "track secondary transmission and prepare contingency triggers"
+      : matrix.overall === "ELEVATED" ? "confirm or deny escalation trajectory within the next two to three cycles"
+      : "maintain monitoring cadence and scenario readiness";
+    return `The forward task is to ${next}. The next intelligence cycle should prioritize confirming signals from ${activeDomains[0] || "primary domains"} and any second independent source that validates or contradicts the current picture.`;
+  })();
 
-  const outlook = `AXION projects the short-term operating picture at ${matrix.overall}. ${watchItems.length > 0 ? `Next cycle monitoring priority: ${watchItems.join("; ")}. ` : ""}Posture revision requires confirming signals across at least two independent domains. Cycle confidence of ${conf}/100 supports this assessment as ${conf >= 82 ? "reliable and actionable" : conf >= 72 ? "directional but not definitive" : "indicative — additional signal ingestion is recommended"}.`;
-
-  const closing = `AXION operates as a signal synthesis system, not a replacement for domain expertise. All assessments should be validated against specialized knowledge before informing consequential decisions. The intelligence cycle runs continuously — this output represents a moment-in-time synthesis. The operating environment can and will shift.`;
-
-  const header = [
-    "FROM THE OFFICE OF EXECUTIVE INTELLIGENCE",
-    "RSR AXION — INTELLIGENCE SYNTHESIS SYSTEM v3.0",
-    `Date: ${date}  |  Cycle: ${cycleLabel}  |  Confidence: ${conf}/100`,
-    "",
-  ].join("\n");
+  const closePara = `RSR AXION — ${date} — ${cycleLabel}. Confidence: ${conf}/100. Posture: ${matrix.overall}. Signals processed: ${events.length}.`;
 
   return [
-    header,
-    `RSR AXION — ${cycleLabel} ARTICLE OUTPUT`,
+    `RSR AXION — INTELLIGENCE ANALYSIS`,
+    `${headline}`,
+    `${date} | ${cycleLabel} | Confidence: ${conf}/100`,
     ``,
-    `HEADLINE`, headline,
-    ``, `SUBHEAD`, subhead,
-    ``, `§1  OPENING`, opening,
-    ``, `§2  BACKGROUND CONTEXT`, background,
-    ``, `§3  CURRENT DEVELOPMENTS`, developments,
-    ``, `§4  MECHANISM ANALYSIS`, mechanism,
-    ``, `§5  SYSTEM-LEVEL IMPLICATIONS`, implications,
-    ``, `§6  FORWARD OUTLOOK`, outlook,
-    ``, `§7  CLOSING ASSESSMENT`, closing,
-    ``, `END OF ARTICLE OUTPUT`,
+    `I. OPENING ASSESSMENT`,
+    openPara,
+    ``,
+    `II. BACKGROUND`,
+    bgPara,
+    ``,
+    `III. CURRENT DEVELOPMENTS`,
+    devPara,
+    ``,
+    `IV. MECHANISM`,
+    mechPara,
+    ``,
+    `V. SYSTEM IMPLICATIONS`,
+    implPara,
+    ``,
+    `VI. OUTLOOK`,
+    outlookPara,
+    ``,
+    `VII. CLOSING`,
+    closePara,
   ].join("\n");
 }
 
@@ -849,67 +1037,56 @@ export function buildBulletin(
   const conf = averageConfidence(events);
   const counts = clusterCounts(events);
 
-  const keyDevelopments = events.slice(0, 7).map((e, i) => {
-    const why = buildWhyItMatters(e, matrix).slice(0, 130);
-    const state = assessPressureState(e);
-    return `${i + 1}. [${e.domain}]  ${e.confidence}/100 confidence  |  Pressure: ${state}\n   ${e.title}\n   ${why}`;
-  }).join("\n\n") || "No primary signals available this cycle.";
+  const postureLine = `POSTURE: ${matrix.overall} | CONFIDENCE: ${conf}/100 | SIGNALS: ${events.length} | DATE: ${date} ${time}`;
 
-  const crossDomain = counts.conflict > 2 && counts.markets > 2
-    ? `Security and market signals are co-active. This coupling increases systemic risk and reduces near-term predictability in both domains.`
-    : counts.conflict > 2
-    ? `Security cluster is the dominant driver. Monitor for economic and logistics transmission as the leading secondary risk.`
-    : counts.markets > 2
-    ? `Market and energy pressure leads the cycle. Watch for security-adjacent ripple effects in resource-competitive geographies.`
-    : counts.infrastructure > 1
-    ? `Infrastructure and technology signals carry the highest latent risk this cycle. Consequence profiles are nonlinear.`
-    : `Broad signal distribution without convergence. No concentrated pattern pressure confirmed.`;
+  const devLines = events.slice(0, 6).map((e, i) => {
+    const tierLabel = e.sourceTier ? `T${e.sourceTier}` : "T?";
+    const corrobLabel = e.corroborated ? " [CORROBORATED]" : "";
+    return `${i + 1}. [${e.domain}] [${tierLabel}${corrobLabel}] ${e.title} — ${e.confidence}/100`;
+  }).join("\n");
 
-  const watchIndicators = [
-    matrix.conflict !== "LOW" && `• Conflict/Security: Escalation velocity, geographic spread, partner nation responses`,
-    matrix.markets !== "LOW" && `• Markets/Energy: Commodity pricing, trade logistics, financial system stress`,
-    matrix.infrastructure !== "LOW" && `• Infrastructure/Cyber: Threat actor activity, critical advisories, resilience metrics`,
-    matrix.information !== "LOW" && `• Policy/Diplomacy: Legislative, executive, or institutional action confirming current signaling`,
-    `• Posture revision requires confirming signals from two or more independent domains`,
+  const implLine = (() => {
+    if (matrix.overall === "CRITICAL") return "Cross-domain compounding is active. Immediate management required.";
+    if (matrix.overall === "HIGH") return "Multi-domain pressure is elevated. Contingency review recommended.";
+    if (matrix.overall === "ELEVATED") return `Developing pressure in ${[counts.conflict > 2 && "security", counts.markets > 2 && "markets", counts.infrastructure > 1 && "infrastructure"].filter(Boolean).join(" and ") || "primary domains"}.`;
+    return "Environment is within manageable parameters. Standard monitoring sufficient.";
+  })();
+
+  const watchLine = [
+    matrix.conflict !== "LOW" && "• CONFLICT: Escalation indicators and force movements.",
+    matrix.markets !== "LOW" && "• MARKETS: Commodity deviation and credit stress.",
+    matrix.infrastructure !== "LOW" && "• INFRASTRUCTURE: CISA advisories and lateral spread.",
+    matrix.information !== "LOW" && "• POLICY: Executive and legislative confirming actions.",
+    `• NEXT: Two independent confirming signals required for posture upgrade.`,
   ].filter(Boolean).join("\n");
 
-  const patternText = patterns.length > 0
-    ? patterns.map(p => `• ${p}`).join("\n")
-    : `• No dominant cross-domain pattern confirmed this cycle.`;
-
-  const div = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+  const patternLine = patterns.length > 0 ? patterns.join("; ") : "No cross-domain patterns confirmed.";
 
   return [
-    "FROM THE OFFICE OF EXECUTIVE INTELLIGENCE",
-    "RSR AXION — INTELLIGENCE BULLETIN",
-    `Date: ${date}  |  Time: ${time}  |  Cycle: ${mode.toUpperCase()}  |  Confidence: ${conf}/100`,
+    `RSR AXION — SITUATIONAL BULLETIN`,
+    postureLine,
     ``,
-    div, `THREAT POSTURE`, div,
-    `Overall:         ${matrix.overall}`,
-    `Conflict:        ${matrix.conflict}`,
-    `Markets:         ${matrix.markets}`,
-    `Infrastructure:  ${matrix.infrastructure}`,
-    `Policy/Info:     ${matrix.information}`,
-    `Confidence:      ${conf}/100`,
-    `Signals:         ${events.length} processed`,
+    `§A  POSTURE`,
+    postureLine,
     ``,
-    div, `KEY DEVELOPMENTS`, div,
-    keyDevelopments,
+    `§B  KEY DEVELOPMENTS`,
+    devLines || "No signals loaded.",
     ``,
-    div, `STRATEGIC IMPLICATION`, div,
-    patternText,
+    `§C  STRATEGIC IMPLICATION`,
+    implLine,
     ``,
-    crossDomain,
+    `§D  PATTERN ANALYSIS`,
+    patternLine,
     ``,
-    div, `WATCH INDICATORS`, div,
-    watchIndicators,
+    `§E  WATCH INDICATORS`,
+    watchLine,
     ``,
-    `END OF BULLETIN`,
+    `END BULLETIN`,
   ].join("\n");
 }
 
 /* ═══════════════════════════════════════════════════════════
-   PRINT HTML — PROFESSIONAL DOCUMENT
+   PRINT HTML BUILDER
 ═══════════════════════════════════════════════════════════ */
 
 export function buildPrintHtml(text: string): string {
@@ -918,236 +1095,66 @@ export function buildPrintHtml(text: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Parse sections from § markers for print formatting
-  const sections = escaped.split(/(?=§\d+\s)/g);
+  const div = "━".repeat(85);
+
+  const formatted = escaped
+    .split("\n")
+    .map(line => {
+      if (line.startsWith("RSR AXION —") || line.startsWith("FROM THE OFFICE")) {
+        return `<div class="doc-title">${line}</div>`;
+      }
+      if (/^§\d+/.test(line) || /^END OF/.test(line)) {
+        return `<div class="section-head">${line}</div>`;
+      }
+      if (line === div || line.startsWith("━━━")) {
+        return `<hr class="divider">`;
+      }
+      if (line.startsWith("──")) {
+        return `<div class="sub-head">${line}</div>`;
+      }
+      if (line.startsWith("─────")) {
+        return `<hr class="sub-divider">`;
+      }
+      if (line.trim() === "") {
+        return `<div class="spacer"></div>`;
+      }
+      return `<div class="line">${line}</div>`;
+    })
+    .join("\n");
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<title>RSR AXION — Intelligence Brief</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RSR AXION Intelligence Brief</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { font-size: 11px; }
-  body {
-    background: #fff;
-    color: #1a1f2e;
-    font-family: 'IBM Plex Mono', 'Courier New', monospace;
-    font-size: 11px;
-    line-height: 1.75;
-    padding: 52px 64px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  /* ── Header Block ── */
-  .doc-header {
-    border-bottom: 2px solid #1a1f2e;
-    padding-bottom: 18px;
-    margin-bottom: 22px;
-  }
-  .doc-title {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 18px;
-    font-weight: 900;
-    letter-spacing: 0.15em;
-    color: #1a1f2e;
-    margin-bottom: 6px;
-  }
-  .doc-subtitle {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.28em;
-    color: #666;
-    text-transform: uppercase;
-  }
-  .doc-meta {
-    margin-top: 14px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-  .doc-meta-item {
-    border: 1px solid #ddd;
-    padding: 7px 10px;
-    font-size: 9.5px;
-    letter-spacing: 0.08em;
-  }
-  .doc-meta-label {
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    font-size: 8px;
-    letter-spacing: 0.16em;
-  }
-  .doc-meta-value {
-    color: #1a1f2e;
-    font-weight: 600;
-    margin-top: 2px;
-  }
-
-  /* ── Threat Badge ── */
-  .threat-badge {
-    display: inline-block;
-    padding: 5px 14px;
-    border: 2px solid #1a1f2e;
-    font-family: 'Orbitron', sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.2em;
-    margin-top: 10px;
-  }
-  .threat-CRITICAL { border-color: #dc2626; color: #dc2626; }
-  .threat-HIGH     { border-color: #d97706; color: #d97706; }
-  .threat-ELEVATED { border-color: #0369a1; color: #0369a1; }
-  .threat-GUARDED  { border-color: #0369a1; color: #0369a1; }
-  .threat-LOW      { border-color: #16a34a; color: #16a34a; }
-
-  /* ── Section ── */
-  .section {
-    margin-top: 24px;
-    page-break-inside: avoid;
-  }
-  .section-header {
-    font-family: 'Orbitron', sans-serif;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    color: #888;
-    border-bottom: 1px solid #ddd;
-    padding-bottom: 5px;
-    margin-bottom: 12px;
-  }
-  .section-body {
-    font-size: 10.5px;
-    line-height: 1.8;
-    color: #2a2f3e;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  /* ── Data Box ── */
-  .data-box {
-    border: 1px solid #ddd;
-    padding: 12px 16px;
-    margin-top: 10px;
-    background: #f9fafb;
-    font-size: 10px;
-    white-space: pre;
-    font-family: 'IBM Plex Mono', monospace;
-  }
-
-  /* ── Signal Block ── */
-  .signal-block {
-    border-left: 3px solid #1a1f2e;
-    padding: 10px 14px;
-    margin-bottom: 14px;
-    page-break-inside: avoid;
-    background: #fafafa;
-  }
-  .signal-block .field-label {
-    font-size: 8.5px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    color: #888;
-    text-transform: uppercase;
-    display: inline-block;
-    width: 110px;
-    flex-shrink: 0;
-  }
-
-  /* ── Footer ── */
-  .doc-footer {
-    margin-top: 40px;
-    border-top: 1px solid #ddd;
-    padding-top: 10px;
-    font-size: 8px;
-    color: #aaa;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-  }
-
-  /* ── Print ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; color: #111; font-family: 'IBM Plex Mono', monospace; font-size: 9.5pt; line-height: 1.55; }
+  body { padding: 28mm 22mm 24mm 22mm; }
+  .doc-title { font-family: 'Orbitron', sans-serif; font-size: 11pt; font-weight: 700; letter-spacing: .12em; margin-bottom: 4px; color: #0a0a0a; }
+  .section-head { font-family: 'Orbitron', sans-serif; font-size: 9pt; font-weight: 700; letter-spacing: .10em; color: #1a1a2a; margin: 12px 0 4px; page-break-after: avoid; }
+  .sub-head { font-weight: 600; color: #222; margin: 8px 0 2px; font-size: 8.5pt; }
+  hr.divider { border: none; border-top: 1.5px solid #111; margin: 6px 0; }
+  hr.sub-divider { border: none; border-top: 0.5px solid #888; margin: 4px 0; }
+  .line { white-space: pre-wrap; word-break: break-word; }
+  .spacer { height: 6px; }
   @media print {
-    body { padding: 30px 42px; }
-    .section { page-break-inside: avoid; }
-    .signal-block { page-break-inside: avoid; }
-    @page { margin: 1.5cm 2cm; }
+    body { padding: 18mm 16mm 16mm 16mm; font-size: 8.5pt; }
+    .section-head { page-break-before: auto; }
+    a { text-decoration: none; color: inherit; }
   }
 </style>
+<script>window.addEventListener('load', () => { setTimeout(() => window.print(), 350); });<\/script>
 </head>
 <body>
-  <div class="doc-header">
-    <div class="doc-title">RSR AXION</div>
-    <div class="doc-subtitle">Intelligence Synthesis System v3.0 — Office of Executive Intelligence</div>
-    <div class="doc-meta">
-      ${extractMetaBlock(text)}
-    </div>
-  </div>
-
-  <div id="content">
-    <pre class="section-body">${escaped}</pre>
-  </div>
-
-  <div class="doc-footer">
-    UNCLASSIFIED · RSR AXION INTELLIGENCE SYNTHESIS SYSTEM · FOR AUTHORIZED USE
-  </div>
-
-  <script>
-    // Auto-print
-    window.addEventListener('load', function() {
-      setTimeout(function() { window.print(); }, 300);
-    });
-  </script>
+${formatted}
 </body>
 </html>`;
 }
 
-function extractMetaBlock(text: string): string {
-  const dateMatch = text.match(/Date:\s*(.+)/);
-  const timeMatch = text.match(/Time:\s*(.+)/);
-  const cycleMatch = text.match(/INTELLIGENCE CYCLE:\s*(.+)/);
-  const confMatch = text.match(/CYCLE CONFIDENCE:\s*(.+)/);
-  const sigMatch = text.match(/SIGNALS PROCESSED:\s*(.+)/);
-
-  const items = [
-    { label: "Date", value: dateMatch?.[1]?.trim() || "—" },
-    { label: "Time", value: timeMatch?.[1]?.trim() || "—" },
-    { label: "Cycle", value: cycleMatch?.[1]?.trim() || "—" },
-    { label: "Confidence", value: confMatch?.[1]?.trim() || "—" },
-    { label: "Signals", value: sigMatch?.[1]?.trim() || "—" },
-    { label: "Classification", value: "UNCLASSIFIED" },
-  ];
-
-  return items.map(i => `
-    <div class="doc-meta-item">
-      <div class="doc-meta-label">${i.label}</div>
-      <div class="doc-meta-value">${i.value}</div>
-    </div>`).join("");
-}
-
-/* ═══════════════════════════════════════════════════════════
-   STORAGE HELPERS
-═══════════════════════════════════════════════════════════ */
-
-export function safeLoad<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-export function saveToStorage<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch { /* storage quota exceeded */ }
-}
+/* ── Misc utilities ─────────────────────────────────────────────────────── */
 
 export function downloadTextFile(filename: string, content: string): void {
   const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
@@ -1155,24 +1162,20 @@ export function downloadTextFile(filename: string, content: string): void {
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
-  document.body.appendChild(a);
   a.click();
-  document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
 
-export function buildRealtimeHeader(
-  intelligenceCycleLine: string = "INTELLIGENCE CYCLE: DAILY",
-  now: Date = new Date()
-): string {
-  const { date, time } = getBrowserDateTimeParts(now);
-  return [
-    "FROM THE OFFICE OF EXECUTIVE INTELLIGENCE",
-    "RSR AXION — INTELLIGENCE SYNTHESIS SYSTEM v3.0",
-    `Location: ${getLocation()}`,
-    `Date: ${date}`,
-    `Time: ${time}`,
-    intelligenceCycleLine,
-    "",
-  ].join("\n");
+export function safeLoad<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+export function saveToStorage(key: string, value: unknown): void {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* quota exceeded */ }
 }
