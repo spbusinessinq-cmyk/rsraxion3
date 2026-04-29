@@ -5,12 +5,35 @@ RSR AXION is an Intelligence Synthesis System — a React + TypeScript + Vite si
 
 ## Architecture
 - **Frontend**: React 18 + TypeScript, bundled with Vite 5
-- **Signal Ingestion**: Browser-native `collectSignals()` using rss2json CORS proxy (`api.rss2json.com`) — no backend required
+- **Signal Ingestion**: Browser-native `collectSignals()` with 4-strategy fetch cascade (see below)
+- **Dev Proxy**: Express server (port 3001) exposes `/api/proxy/rss?url=` — Node.js fetches RSS with proper headers bypassing domain blocks. Vite proxies `/api/*` to port 3001.
 - **Styling**: Plain CSS (`src/index.css`) — Orbitron (display) + IBM Plex Mono (data/mono) via Google Fonts
 - **Icons**: lucide-react
 - **Dev**: `concurrently` runs Express API on port 3001 + Vite dev server on port 5000
 - **Deployment**: Static — `npm run build` → `dist/assets-v3/` served by EdgeOne CDN
 - **Persistence**: localStorage only, keys at `-v6` suffix
+
+## Signal Fetch Strategy (4-tier cascade)
+Each feed is attempted with 4 strategies in sequence, stopping at first success:
+1. **rss2json** (`api.rss2json.com`, 4s timeout) — works in production on EdgeOne CDN; blocked with HTTP 422 from Replit preview domain
+2. **Local Node proxy** (`/api/proxy/rss?url=`, 5.5s timeout) — works in dev; Node.js fetches with Googlebot User-Agent bypassing CDN blocks; fast 404 in production (no server on CDN)
+3. **allorigins.win** (6s timeout) — external CORS proxy + DOMParser XML parsing; supplemental fallback
+4. **corsproxy.io** (5s timeout) — last resort CORS proxy + DOMParser XML parsing
+
+## Tiered Fallback Logic
+- **≥ 50 live usable signals**: No fallback. UI shows "Live feed" badge.
+- **20–49 live usable signals**: Supplement with labeled fallback signals up to 50. UI shows "Supplemented" badge.
+- **< 20 live usable signals**: Full fallback mode. UI shows "Fallback mode" badge.
+
+## RSS XML Parser (`parseRssXml`)
+Browser DOMParser handles RSS 2.0 (`channel > item`) and Atom (`feed > entry`). Used by strategies 3 and 4 which proxy raw XML.
+
+## Dev Performance (Replit Preview)
+- Strategy 1 fails fast (~300ms/feed via 422)
+- Strategy 2 succeeds for ~51/78 feeds (~1-3s each)
+- Strategy 3 handles ~1-2 additional feeds
+- Total pull time: ~27-34 seconds for all 78 feeds
+- Consistent results: ok=51-53/78 · raw=997-1028 · scored=500
 
 ## v3.0 Intelligence Engine (Pass 2)
 

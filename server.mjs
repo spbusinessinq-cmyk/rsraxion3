@@ -162,6 +162,41 @@ async function fetchFeed(url, fallbackDomain, perFeed) {
   }
 }
 
+/* ── /api/proxy/rss — per-feed Node.js RSS proxy ─────────── */
+// Browser calls this in dev; Node.js fetches without domain restrictions.
+// Falls back to allorigins in production (static CDN, no server).
+app.get("/api/proxy/rss", async (req, res) => {
+  const url = req.query.url;
+  if (!url || typeof url !== "string") return res.status(400).json({ error: "url required" });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5500);
+  try {
+    const upstream = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        "Accept": "application/rss+xml, application/atom+xml, text/xml, application/xml, */*",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+      },
+    });
+    clearTimeout(timer);
+    if (!upstream.ok) return res.status(upstream.status).json({ error: `upstream ${upstream.status}` });
+    const body = await upstream.text();
+    res.setHeader("Content-Type", "application/xml; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.send(body);
+  } catch (err) {
+    clearTimeout(timer);
+    const reason = err?.name === "AbortError" ? "timeout" : String(err?.message ?? "error");
+    console.log(`[proxy/rss] ERR ${reason} — ${url}`);
+    res.status(502).json({ error: reason });
+  }
+});
+
 /* ── /health ──────────────────────────────────────────────── */
 app.get("/health", (req, res) => {
   res.json({ status: "AXION ONLINE", timestamp: new Date().toISOString(), feeds: FEED_SOURCES.length });

@@ -1,0 +1,273 @@
+Fix AXION signal pull volume and fallback behavior.
+
+The UI/design is good now. Do NOT redesign the UI. Do NOT change the visual style.
+
+Problem:
+Live Signals / Usable Signals is still too low. AXION is showing fallback signals instead of pulling enough real live signals. We need the signal pipeline to be more resilient and pull the highest possible number of usable live signals while keeping the app stable.
+
+Goal:
+Make Pull Signals return significantly more usable real signals.
+
+Do NOT break:
+- current UI
+- print/PDF design
+- archive
+- exports
+- static EdgeOne deployment
+- local persistence
+- scoring model
+- report generation
+
+━━━━━━━━━━━━━━━━━━━━━━━
+1. DIAGNOSE CURRENT PULL FAILURE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Inspect the current signal pull logic in App.tsx and utils.ts.
+
+Find why live signals are low:
+- rss2json 422 errors
+- CORS issues
+- bad feed URLs
+- over-strict relevance filter
+- parsing failures
+- batching issues
+- feed cap issues
+- domain filters accidentally removing too much
+- fallback triggering too early
+
+Add temporary console/debug logging for:
+- feeds attempted
+- feeds successful
+- feeds failed
+- raw items collected
+- parsed items
+- rejected items
+- deduped items
+- usable signals
+- final queue size
+
+Do not spam production UI, but expose enough debug info in console or a hidden debug object.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+2. FIX FEED FETCHING STRATEGY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Improve RSS fetching reliability.
+
+Use multiple fetch strategies if possible:
+
+Primary:
+- rss2json endpoint
+
+Fallback:
+- allorigins/raw or allorigins/get if compatible
+- direct fetch when CORS allows
+- alternate public RSS-to-JSON compatible endpoint if already safe
+- per-feed fallback source if a feed fails
+
+If one strategy fails, try the next before marking the feed failed.
+
+Do not let one failed feed stop the whole pull.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+3. FEED HEALTH AND AUTO-SKIP
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Track feed health per pull.
+
+For every feed:
+- attempted
+- success/fail
+- item count
+- error type
+- latency
+- domain
+
+If a feed returns 422/403/empty repeatedly, skip it for the current pull and continue.
+
+Do not let failed feeds trigger global fallback if other feeds succeeded.
+
+Fallback mode should only activate if total usable real signals is below a minimum threshold.
+
+Set threshold:
+- if usable real signals >= 50, do NOT use fallback
+- if usable real signals < 50, supplement with fallback but mark fallback clearly
+
+━━━━━━━━━━━━━━━━━━━━━━━
+4. INCREASE REAL SIGNAL SOURCES
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Add more reliable RSS feeds across key domains.
+
+Prioritize feeds that work through public RSS access.
+
+Add or replace feeds with reliable sources for:
+
+Global Affairs:
+- AP
+- Reuters if accessible
+- BBC World
+- NPR World
+- Al Jazeera RSS if accessible
+- DW News if accessible
+
+Security / Defense:
+- Defense News
+- Breaking Defense
+- Military.com
+- War on the Rocks if RSS works
+- ISW if RSS works
+- CISA advisories for cyber-security overlap
+
+Technology / AI:
+- The Verge
+- Wired
+- Ars Technica
+- MIT Technology Review if RSS works
+- TechCrunch AI
+- Google AI Blog if RSS works
+- OpenAI Blog RSS if available
+- Anthropic news/blog RSS if available
+
+Cyber / Signals:
+- CISA
+- KrebsOnSecurity
+- BleepingComputer
+- The Hacker News
+- Dark Reading
+- SANS ISC
+- NVD / NIST if accessible
+
+Markets / Economy:
+- MarketWatch
+- CNBC Economy/Markets if RSS works
+- Yahoo Finance RSS if usable
+- Reuters business if accessible
+- Federal Reserve press releases if RSS works
+- SEC press releases if RSS works
+
+Energy:
+- EIA
+- OilPrice RSS if usable
+- Energy.gov
+- Utility Dive
+
+Infrastructure / Supply Chains:
+- FreightWaves
+- Supply Chain Dive
+- Transport Topics
+- Engineering News-Record
+- Utility Dive
+
+Policy / Regulation:
+- Federal Register
+- White House fact sheets if RSS available
+- Congress.gov if feeds available
+- FTC / DOJ / SEC / FCC press releases if feeds exist
+
+Space / Orbital:
+- NASA breaking news
+- NOAA
+- SpaceNews
+- Space.com
+
+Remove or demote feeds that consistently fail.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+5. RELAX FILTER JUST ENOUGH
+━━━━━━━━━━━━━━━━━━━━━━━
+
+The relevance filter may be too strict.
+
+Keep garbage out, but do not reject legitimate signals just because they lack obvious keywords.
+
+Improve isStrategicallyRelevant(signal):
+
+Pass if:
+- source is Tier 1 or Tier 2 AND title/summary has institutional/system relevance
+- domain is Security, Cyber, Energy, Markets, Infrastructure, Policy, AI, Supply Chains, Space
+- summary contains national, government, industry, military, economic, legal, infrastructure, cyber, AI, energy, or institutional context
+- source is high reliability and title is not entertainment/sports/lifestyle
+
+Reject only when clearly irrelevant.
+
+Do not reject:
+- markets stories
+- defense industry stories
+- infrastructure stories
+- energy price stories
+- cyber advisories
+- regulatory actions
+- space/weather infrastructure stories
+- public health policy stories
+
+━━━━━━━━━━━━━━━━━━━━━━━
+6. BETTER FALLBACK RULE
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Right now fallback appears too early.
+
+Change fallback behavior:
+
+- Pull real feeds first
+- Score/filter/dedup
+- If usable >= 50: no fallback
+- If usable 20–49: supplement fallback up to 50 but label fallback count
+- If usable < 20: fallback mode active
+
+UI should show:
+RAW COLLECTED: actual raw count
+USABLE SIGNALS: real usable + fallback if supplemented
+LIVE QUEUE: displayed count
+FALLBACK: 0 / supplemented / active
+
+Do not make fallback look like full live success.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+7. QUEUE CAP
+━━━━━━━━━━━━━━━━━━━━━━━
+
+Raise internal usable queue cap safely.
+
+Target:
+- collect as many as possible
+- after dedup/relevance/scoring, keep top 500 usable signals internally
+- display top 300 unless UI performance supports more
+- report modes use:
+  Quick: 6
+  Daily: 15
+  Weekly: 25
+  Full: 40
+
+If browser performance is fine, allow queue display cap setting to 500.
+
+━━━━━━━━━━━━━━━━━━━━━━━
+8. BUILD / VERIFY
+━━━━━━━━━━━━━━━━━━━━━━━
+
+After changes:
+- run npm run build
+- fix all errors
+- test Pull Signals
+- log feed attempt count
+- log successful feed count
+- log raw collected
+- log usable signals
+- log fallback count
+- verify queue is populated with real signals when deployed or preview allows
+- verify reports still generate
+- verify print still works
+- verify archive still works
+
+Final response must include:
+- files changed
+- feed count
+- fetch strategies added
+- successful feeds in test
+- raw collected
+- usable signals
+- fallback status
+- build result
+
+Important:
+Keep the current operator-grade design. Only fix the signal pipeline and fallback behavior.
