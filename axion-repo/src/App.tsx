@@ -4,7 +4,12 @@ import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Gl
 import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, DomainFilter, ExportKind, FeedEvent, FeedHealth, HistoryEntry, Mode, RejectionReason, SignalPipelineStats, ThreatMatrix } from "./lib/types";
 import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, getSourceTier, safeLoad, saveToStorage, scoreBand, scoreSignal } from "./lib/utils";
 
-// cache-bust-v4
+// cache-bust-v5
+
+/* ── Build identity ─────────────────────────────────────────────────────── */
+
+const BUILD_VERSION = "AXION-v3-signal-500-live";
+const BUILD_VER_KEY = "rsr-axion-bv";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -563,6 +568,24 @@ export default function App() {
   useEffect(() => saveToStorage(STORAGE_KEYS.used, usedInBrief), [usedInBrief]);
   useEffect(() => saveToStorage(STORAGE_KEYS.verified, manualVerified), [manualVerified]);
   useEffect(() => saveToStorage(STORAGE_KEYS.excluded, excludedIds), [excludedIds]);
+
+  // Build-version guard: log version transitions; clear signal-adjacent keys on upgrade
+  useEffect(() => {
+    const prev = localStorage.getItem(BUILD_VER_KEY);
+    if (prev !== BUILD_VERSION) {
+      localStorage.setItem(BUILD_VER_KEY, BUILD_VERSION);
+      if (prev) {
+        // Clear per-session state so stale signal IDs from old builds don't linger
+        localStorage.removeItem(STORAGE_KEYS.used);
+        localStorage.removeItem(STORAGE_KEYS.verified);
+        localStorage.removeItem(STORAGE_KEYS.excluded);
+        console.log(`[AXION] Build upgraded ${prev} → ${BUILD_VERSION}. Cleared session state.`);
+      } else {
+        console.log(`[AXION] Build version set: ${BUILD_VERSION}`);
+      }
+    }
+  }, []);
+
   useEffect(() => { void ingestSignals(); }, []);
 
   async function ingestSignals() {
@@ -574,21 +597,31 @@ export default function App() {
       const totalFeeds = stats.successFeeds + stats.failFeeds;
 
       // Tiered fallback: ≥50 live = no fallback, 20-49 = supplement, <20 = full fallback
+      let fallbackMode: "none" | "supplemented" | "full" = "none";
+      let fallbackCount = 0;
+      let queueSize = liveCount;
+
       if (liveCount >= 50) {
-        // No fallback needed
+        fallbackMode = "none";
+        fallbackCount = 0;
+        queueSize = Math.min(liveCount, 500);
         setUsingFallback("none");
         setEvents(signals.slice(0, 500));
         setStatusMessage(`${liveCount} live signals · ${stats.successFeeds}/${totalFeeds} feeds · ${stats.rawCount} raw`);
       } else if (liveCount >= 20) {
-        // Supplement with labeled fallback signals up to 50 minimum
         const needed = Math.min(50 - liveCount, FALLBACK_SIGNALS.length);
+        fallbackMode = "supplemented";
+        fallbackCount = needed;
+        queueSize = liveCount + needed;
         const supplemented = [...signals, ...FALLBACK_SIGNALS.slice(0, needed)];
         setUsingFallback("supplemented");
         setEvents(supplemented);
         setStatusMessage(`${liveCount} live + ${needed} supplemented · ${stats.successFeeds}/${totalFeeds} feeds · ${stats.rawCount} raw`);
         console.warn(`[AXION] partial fallback — ${liveCount} live signals, supplemented with ${needed} fallback.`);
       } else {
-        // Full fallback — not enough live signals
+        fallbackMode = "full";
+        fallbackCount = FALLBACK_SIGNALS.length;
+        queueSize = liveCount + FALLBACK_SIGNALS.length;
         setUsingFallback("full");
         setEvents(liveCount > 0 ? [...signals, ...FALLBACK_SIGNALS] : FALLBACK_SIGNALS);
         const failSources = stats.feedHealth.filter(f => !f.success).slice(0, 8).map(f => `${f.source}:${f.errorType}`).join(", ");
@@ -600,6 +633,24 @@ export default function App() {
       setRawSignalCount(stats.rawCount);
       setPinned([]);
       setDismissed([]);
+
+      // ── Full debug dump ──────────────────────────────────────────────────
+      console.log(
+        `[AXION SIGNAL REPORT]\n` +
+        `  BUILD_VERSION : ${BUILD_VERSION}\n` +
+        `  FEED_COUNT    : ${BROWSER_FEEDS.length}\n` +
+        `  PER_FEED      : 25\n` +
+        `  RAW_COLLECTED : ${stats.rawCount}\n` +
+        `  PARSED        : ${stats.parsedCount}\n` +
+        `  REJECTED      : ${stats.rejectedCount}\n` +
+        `  DEDUPED       : ${stats.dedupCount}\n` +
+        `  USABLE        : ${stats.usableCount}\n` +
+        `  QUEUE_SIZE    : ${queueSize}\n` +
+        `  FALLBACK_COUNT: ${fallbackCount}\n` +
+        `  FALLBACK_MODE : ${fallbackMode}\n` +
+        `  FEEDS_OK      : ${stats.successFeeds}/${totalFeeds}\n` +
+        `  ELAPSED_MS    : ${stats.elapsed}`
+      );
     } catch (err) {
       setUsingFallback("full");
       setEvents(FALLBACK_SIGNALS);
