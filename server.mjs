@@ -163,11 +163,10 @@ async function fetchFeed(url, fallbackDomain, perFeed) {
 }
 
 /* ── /api/proxy/rss — per-feed Node.js RSS proxy ─────────── */
-// Browser calls this in dev; Node.js fetches without domain restrictions.
-// Falls back to allorigins in production (static CDN, no server).
 app.get("/api/proxy/rss", async (req, res) => {
   const url = req.query.url;
   if (!url || typeof url !== "string") return res.status(400).json({ error: "url required" });
+  console.log("[AXION PROXY HIT]", url);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5500);
@@ -204,7 +203,12 @@ app.get("/health", (req, res) => {
 
 /* ── /api/health ──────────────────────────────────────────── */
 app.get("/api/health", (req, res) => {
-  res.json({ status: "AXION ONLINE", timestamp: new Date().toISOString(), static: SERVE_STATIC, port: PORT, feeds: FEED_SOURCES.length });
+  res.json({
+    status: "AXION NODE ONLINE",
+    proxy: true,
+    buildVersion: "AXION-v3-node-proxy-required",
+    timestamp: new Date().toISOString(),
+  });
 });
 
 /* ── /api/signals ─────────────────────────────────────────── */

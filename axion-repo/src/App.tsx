@@ -4,11 +4,11 @@ import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Gl
 import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, DomainFilter, ExportKind, FeedEvent, FeedHealth, HistoryEntry, Mode, RejectionReason, SignalPipelineStats, ThreatMatrix } from "./lib/types";
 import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, getSourceTier, safeLoad, saveToStorage, scoreBand, scoreSignal } from "./lib/utils";
 
-// cache-bust-v5
+// cache-bust-v6
 
 /* ── Build identity ─────────────────────────────────────────────────────── */
 
-const BUILD_VERSION = "AXION-v3-signal-500-live";
+const BUILD_VERSION = "AXION-v3-node-proxy-required";
 const BUILD_VER_KEY = "rsr-axion-bv";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
@@ -272,76 +272,110 @@ function parseRssXml(xml: string): Rss2JsonItem[] {
   }
 }
 
-/* Multi-strategy feed fetcher: rss2json (production) → allorigins proxy (dev/fallback) */
-async function fetchFeedItems(url: string, perFeed: number): Promise<{ items: Rss2JsonItem[]; strategy: string }> {
-  // Strategy 1: rss2json (fast, works in production on EdgeOne CDN)
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 4000);
-    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${perFeed}`;
-    const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
-    clearTimeout(timer);
-    if (res.ok) {
-      const data = await res.json() as Rss2JsonResponse;
-      if (data.status === "ok" && Array.isArray(data.items) && data.items.length > 0) {
-        return { items: data.items.slice(0, perFeed), strategy: "rss2json" };
-      }
-    }
-    // 422/403/empty → fall through to proxy strategy
-  } catch { /* timeout or network error — try next */ }
+/* Multi-strategy feed fetcher — strategy order driven by proxyMode */
+async function fetchFeedItems(
+  url: string,
+  perFeed: number,
+  proxyMode: "node" | "static",
+): Promise<{ items: Rss2JsonItem[]; strategy: string }> {
 
-  // Strategy 2: Local Node.js RSS proxy (dev only — Vite proxies /api/* to localhost:3001)
-  // Node.js fetches with proper headers, bypassing domain restrictions. Fast 404 in production.
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5500);
-    const proxyUrl = `/api/proxy/rss?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
-    clearTimeout(timer);
-    if (res.ok) {
-      const xml = await res.text();
-      // Sanity check: should be XML, not a JSON error response
-      if (xml.trim().startsWith("<")) {
+  if (proxyMode === "node") {
+    // Node proxy available: use /api/proxy/rss as primary, allorigins/corsproxy as fallback only
+
+    // Strategy 1: Node.js proxy (bypasses CDN domain restrictions server-side)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5500);
+      const res = await fetch(`/api/proxy/rss?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const xml = await res.text();
+        if (xml.trim().startsWith("<")) {
+          const items = parseRssXml(xml);
+          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "local-proxy" };
+        }
+      }
+    } catch { /* proxy not responding for this feed — fall through */ }
+
+    // Strategy 2: allorigins (for feeds blocked at server level — AP News etc.)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const xml = await res.text();
+        if (xml.trim().startsWith("<")) {
+          const items = parseRssXml(xml);
+          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
+        }
+      }
+    } catch { /* fall through */ }
+
+    // Strategy 3: corsproxy.io (last resort)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const xml = await res.text();
         const items = parseRssXml(xml);
-        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "local-proxy" };
+        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
       }
-    }
-  } catch { /* not available (production CDN) — try next */ }
+    } catch { /* all strategies exhausted */ }
 
-  // Strategy 3: allorigins.win raw proxy + DOMParser
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 6000);
-    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
-    clearTimeout(timer);
-    if (res.ok) {
-      const xml = await res.text();
-      if (xml.trim().startsWith("<")) {
+  } else {
+    // Static mode — no node proxy; use rss2json then external proxies
+
+    // Strategy 1: rss2json (works on non-Replit hosted domains)
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${perFeed}`;
+      const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json() as Rss2JsonResponse;
+        if (data.status === "ok" && Array.isArray(data.items) && data.items.length > 0) {
+          return { items: data.items.slice(0, perFeed), strategy: "rss2json" };
+        }
+      }
+    } catch { /* fall through */ }
+
+    // Strategy 2: allorigins
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const xml = await res.text();
+        if (xml.trim().startsWith("<")) {
+          const items = parseRssXml(xml);
+          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
+        }
+      }
+    } catch { /* fall through */ }
+
+    // Strategy 3: corsproxy.io
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 5000);
+      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      clearTimeout(timer);
+      if (res.ok) {
+        const xml = await res.text();
         const items = parseRssXml(xml);
-        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
+        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
       }
-    }
-  } catch { /* timeout or proxy error — try next */ }
-
-  // Strategy 4: corsproxy.io + DOMParser (last resort for external access)
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 5000);
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const res = await fetch(proxyUrl, { signal: controller.signal, cache: "no-store" });
-    clearTimeout(timer);
-    if (res.ok) {
-      const xml = await res.text();
-      const items = parseRssXml(xml);
-      if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
-    }
-  } catch { /* all strategies exhausted */ }
+    } catch { /* all strategies exhausted */ }
+  }
 
   throw new Error("ALL_STRATEGIES_EXHAUSTED");
 }
 
-async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
+async function collectSignals(proxyMode: "node" | "static"): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
   const PER_FEED = 25;
   const BATCH_SIZE = 20;
   const started = Date.now();
@@ -367,7 +401,7 @@ async function collectSignals(): Promise<{ signals: FeedEvent[]; stats: SignalPi
         const feedStart = Date.now();
 
         try {
-          const { items, strategy } = await fetchFeedItems(url, PER_FEED);
+          const { items, strategy } = await fetchFeedItems(url, PER_FEED, proxyMode);
           strategyCounts[strategy] = (strategyCounts[strategy] ?? 0) + 1;
 
           const feedItems: FeedEvent[] = [];
@@ -558,6 +592,7 @@ export default function App() {
   const [executiveBrief, setExecutiveBrief] = useState("");
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState<"none" | "supplemented" | "full">("none");
+  const [proxyMode, setProxyMode] = useState<"node" | "static">("static");
   const [statusMessage, setStatusMessage] = useState("");
   const [pipelineStats, setPipelineStats] = useState<SignalPipelineStats>(DEFAULT_PIPELINE_STATS);
   const [rawSignalCount, setRawSignalCount] = useState(0);
@@ -592,9 +627,39 @@ export default function App() {
     setLoading(true);
     setStatusMessage("");
     try {
-      const { signals, stats } = await collectSignals();
+      // ── Proxy health check ───────────────────────────────────────────────
+      let healthOk = false;
+      let resolvedProxyMode: "node" | "static" = "static";
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 2000);
+        const hr = await fetch("/api/health", { signal: ctrl.signal, cache: "no-store" });
+        clearTimeout(t);
+        if (hr.ok) {
+          const hd = await hr.json() as { proxy?: boolean };
+          if (hd.proxy === true) { healthOk = true; resolvedProxyMode = "node"; }
+        }
+      } catch { /* Node server unreachable — fall back to static mode */ }
+
+      setProxyMode(resolvedProxyMode);
+
+      console.log(
+        `[AXION PRODUCTION MODE]\n` +
+        `  BUILD_VERSION       : ${BUILD_VERSION}\n` +
+        `  PROXY_MODE         : ${resolvedProxyMode}\n` +
+        `  HEALTH_OK          : ${healthOk}\n` +
+        `  API_PROXY_AVAILABLE: ${resolvedProxyMode === "node"}`
+      );
+
+      // ── Signal collection ────────────────────────────────────────────────
+      const { signals, stats } = await collectSignals(resolvedProxyMode);
       const liveCount = signals.length;
       const totalFeeds = stats.successFeeds + stats.failFeeds;
+
+      // Warn if static mode is under-serving
+      if (resolvedProxyMode === "static" && stats.usableCount < 300) {
+        console.warn(`[AXION] WARNING: STATIC FALLBACK — NODE PROXY OFFLINE. usable=${stats.usableCount}`);
+      }
 
       // Tiered fallback: ≥50 live = no fallback, 20-49 = supplement, <20 = full fallback
       let fallbackMode: "none" | "supplemented" | "full" = "none";
@@ -956,6 +1021,9 @@ export default function App() {
                   : <div className="pill"><Globe size={12} /> Live feed</div>
                 }
                 <div className="pill"><Database size={12} /> Persistence active</div>
+                {proxyMode === "static" && pipelineStats.usableCount > 0 && pipelineStats.usableCount < 300 && (
+                  <div className="pill warn">STATIC FALLBACK — NODE PROXY OFFLINE</div>
+                )}
                 {statusMessage && <div className="pill">{statusMessage}</div>}
               </div>
               <textarea
