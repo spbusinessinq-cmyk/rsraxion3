@@ -1,0 +1,221 @@
+AXION production signal pull is still failing. Live site pulled only 35 signals.
+
+This must be fixed NOW.
+
+Root cause:
+EdgeOne Pages static hosting does not run server.mjs.
+Therefore /api/health and /api/proxy/rss do not exist in production.
+That means the browser falls back to rss2json/allorigins and gets 35–95 signals.
+
+Do NOT keep trying to make EdgeOne Pages static run Node.
+It will not.
+
+We need a production-safe architecture.
+
+GOAL:
+Live AXION must reliably pull 500 usable signals.
+
+Implement one of these working solutions, in order of preference:
+
+==================================================
+OPTION A — CLIENT-SIDE MULTI-PROXY RESILIENT INGESTION
+==================================================
+
+Because EdgeOne Pages is static, make AXION work WITHOUT server.mjs.
+
+Rewrite client-side signal fetching so it does not depend on /api/proxy/rss.
+
+Requirements:
+- Remove dependency on Node proxy for production success.
+- Keep /api/proxy/rss only as optional if available.
+- Add multiple public CORS/RSS fallback strategies.
+- Do not allow all 78 feeds to hit one proxy at once.
+- Use rotating proxy strategy.
+- Batch feeds slowly.
+- Retry failed feeds.
+- Cap concurrent requests.
+
+Fetch strategy order per feed:
+
+1. Try rss2json:
+https://api.rss2json.com/v1/api.json?rss_url=ENCODED_URL
+
+2. If rss2json fails, try AllOrigins GET:
+https://api.allorigins.win/get?url=ENCODED_URL
+
+3. If that fails, try AllOrigins RAW:
+https://api.allorigins.win/raw?url=ENCODED_URL
+
+4. If that fails, try Jina AI Reader if suitable:
+https://r.jina.ai/http://r.jina.ai/http://...
+or use r.jina.ai/http:// + feed URL only if parsing returns usable XML/text.
+
+5. If that fails, skip feed and record failure.
+
+IMPORTANT:
+Do NOT hit allorigins 78 times at once.
+That is why production collapses.
+
+Implement:
+- max concurrency: 5
+- per-feed timeout: 8 seconds
+- retry count: 1
+- stagger delay between batches: 500–1000ms
+- proxy rotation
+- fail fast on bad feeds
+- continue if feed fails
+
+Expected:
+Even if each feed returns 10–15 items, 70+ feeds should produce hundreds of raw items.
+
+==================================================
+OPTION B — EDGEONE FUNCTIONS PROXY
+==================================================
+
+If EdgeOne supports functions in this project, create serverless functions:
+
+/api/health
+/api/proxy/rss
+
+But do NOT assume server.mjs runs.
+
+Use EdgeOne Functions format if available in repo.
+
+Create:
+functions/api/health.js
+functions/api/proxy/rss.js
+
+or the correct EdgeOne functions directory format.
+
+The health route must return:
+{
+  status: "AXION EDGE FUNCTION ONLINE",
+  proxy: true,
+  buildVersion: "AXION-v3-edge-function-proxy"
+}
+
+The proxy route must accept:
+?url=
+
+Fetch RSS server-side and return raw text or parsed JSON.
+
+Frontend should detect:
+- /api/health works → use Edge function proxy
+- /api/health fails → use client-side resilient ingestion
+
+==================================================
+OPTION C — EXTERNAL PROXY SERVICE CONFIG
+==================================================
+
+If static-only remains unavoidable, add optional environment/config variable:
+
+VITE_AXION_PROXY_BASE
+
+If set, frontend uses:
+VITE_AXION_PROXY_BASE + "/api/proxy/rss?url="
+
+This allows us to host the proxy later on:
+- Replit Deployments
+- Render
+- Railway
+- Cloudflare Worker
+- Vercel function
+
+But the app must still work without it using Option A.
+
+==================================================
+MANDATORY IMPLEMENTATION
+==================================================
+
+1. Add production mode detector:
+- test /api/health
+- if success: PROXY_MODE = "server"
+- if fail: PROXY_MODE = "static-resilient"
+
+2. If static-resilient:
+- use rotating client-side proxy strategy
+- concurrency limit 5
+- retry once
+- stagger batches
+- no global fallback unless usable < 50
+
+3. Add visible/internal stats:
+- PROXY_MODE
+- FEEDS_ATTEMPTED
+- FEEDS_SUCCESSFUL
+- FEEDS_FAILED
+- RAW_COLLECTED
+- PARSED
+- REJECTED
+- DEDUPED
+- USABLE
+- QUEUE_SIZE
+- FALLBACK_COUNT
+
+4. Stop treating 35–95 as acceptable.
+If usable < 300:
+- show chip: DEGRADED INGESTION
+- console.warn with exact failed feed count and proxy mode
+
+5. Add feed pruning:
+- if a feed fails twice in one pull, skip it
+- if a feed returns empty, count as EMPTY_FEED
+- if a feed returns CORS/proxy failure, count as PROXY_FAIL
+- if rss2json status error, count as RSS2JSON_ERROR
+
+6. Improve source pool:
+Add more reliable RSS feeds, but only if they work with static-resilient fetching.
+Keep feed count around 80–120.
+Do not add junk feeds.
+
+7. Build version:
+Set BUILD_VERSION = "AXION-v3-static-resilient-500"
+
+On version change:
+- clear signal cache/session state
+- preserve archive and analyst notes
+
+==================================================
+TEST REQUIREMENTS
+==================================================
+
+Run npm run build.
+
+Then test Pull Signals in the actual Replit preview.
+
+Expected in static-resilient mode:
+- FEEDS_ATTEMPTED: 78+
+- FEEDS_SUCCESSFUL: 40+
+- RAW_COLLECTED: 400+
+- USABLE: 300–500 minimum
+- FALLBACK_COUNT: 0 if usable >= 50
+
+If static-resilient mode cannot reach 300 usable, do NOT lie.
+Print the exact bottleneck:
+- proxy rate limit
+- feed failures
+- filter too strict
+- source pool weak
+- EdgeOne static limitation
+
+==================================================
+IMPORTANT
+==================================================
+
+Do NOT redesign UI.
+Do NOT touch report design.
+Do NOT break archive/export/print.
+Do NOT depend on server.mjs for production.
+EdgeOne Pages is static; solve for static.
+
+FINAL RESPONSE MUST INCLUDE:
+- files changed
+- proxy modes supported
+- concurrency limit
+- feed count
+- successful feeds
+- raw collected
+- usable signals
+- fallback count
+- build result
+- whether production still needs an external proxy for true 500 reliability

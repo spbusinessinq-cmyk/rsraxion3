@@ -4,11 +4,11 @@ import { ArrowDownToLine, CheckCircle2, Database, Download, EyeOff, FileText, Gl
 import type { ArchiveModeFilter, ArchiveSort, ArchiveThreatFilter, BriefDepth, DomainFilter, ExportKind, FeedEvent, FeedHealth, HistoryEntry, Mode, RejectionReason, SignalPipelineStats, ThreatMatrix } from "./lib/types";
 import { averageConfidence, buildArticle, buildBulletin, buildFullBrief, buildPrintHtml, clusterCounts, downloadTextFile, formatThreatOrder, getSourceTier, safeLoad, saveToStorage, scoreBand, scoreSignal } from "./lib/utils";
 
-// cache-bust-v6
+// cache-bust-v7
 
 /* ── Build identity ─────────────────────────────────────────────────────── */
 
-const BUILD_VERSION = "AXION-v3-node-proxy-required";
+const BUILD_VERSION = "AXION-v3-static-resilient-500";
 const BUILD_VER_KEY = "rsr-axion-bv";
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
@@ -46,6 +46,24 @@ const DEFAULT_PIPELINE_STATS: SignalPipelineStats = {
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+class Semaphore {
+  private slots: number;
+  private waiting: Array<() => void> = [];
+  constructor(slots: number) { this.slots = slots; }
+  acquire(): Promise<void> {
+    if (this.slots > 0) { this.slots--; return Promise.resolve(); }
+    return new Promise(resolve => this.waiting.push(resolve));
+  }
+  release(): void {
+    if (this.waiting.length > 0) { this.waiting.shift()!(); }
+    else { this.slots++; }
+  }
 }
 
 function confidenceLabel(c: number) {
@@ -272,112 +290,118 @@ function parseRssXml(xml: string): Rss2JsonItem[] {
   }
 }
 
-/* Multi-strategy feed fetcher — strategy order driven by proxyMode */
+/* ─── Static-resilient multi-proxy feed fetcher ─────────────────────────────
+   Strategy order (applied regardless of hosting):
+     0. Node proxy (/api/proxy/rss)   — only when health check confirmed "node"
+     1. rss2json                      — fast, broad feed support
+     2. AllOrigins GET                — returns JSON {contents}, avoids rate limits
+     3. AllOrigins RAW                — direct XML passthrough
+     4. corsproxy.io                  — last-resort CORS relay
+   Each attempt has an 8-second timeout. Caller handles retry logic.
+─────────────────────────────────────────────────────────────────────────── */
 async function fetchFeedItems(
   url: string,
   perFeed: number,
-  proxyMode: "node" | "static",
+  proxyMode: "node" | "static-resilient",
 ): Promise<{ items: Rss2JsonItem[]; strategy: string }> {
+  const T = 8000;
 
+  const asXml = (text: string): Rss2JsonItem[] | null => {
+    const t = text.trim();
+    if (!t.startsWith("<")) return null;
+    const items = parseRssXml(t);
+    return items.length > 0 ? items : null;
+  };
+
+  // Strategy 0: Node proxy — only when node server is confirmed online
   if (proxyMode === "node") {
-    // Node proxy available: use /api/proxy/rss as primary, allorigins/corsproxy as fallback only
-
-    // Strategy 1: Node.js proxy (bypasses CDN domain restrictions server-side)
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5500);
-      const res = await fetch(`/api/proxy/rss?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), T);
+      const res = await fetch(`/api/proxy/rss?url=${encodeURIComponent(url)}`, { signal: ctrl.signal, cache: "no-store" });
       clearTimeout(timer);
       if (res.ok) {
-        const xml = await res.text();
-        if (xml.trim().startsWith("<")) {
-          const items = parseRssXml(xml);
-          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "local-proxy" };
-        }
+        const items = asXml(await res.text());
+        if (items) return { items: items.slice(0, perFeed), strategy: "node-proxy" };
       }
-    } catch { /* proxy not responding for this feed — fall through */ }
-
-    // Strategy 2: allorigins (for feeds blocked at server level — AP News etc.)
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
-      clearTimeout(timer);
-      if (res.ok) {
-        const xml = await res.text();
-        if (xml.trim().startsWith("<")) {
-          const items = parseRssXml(xml);
-          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
-        }
-      }
-    } catch { /* fall through */ }
-
-    // Strategy 3: corsproxy.io (last resort)
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
-      clearTimeout(timer);
-      if (res.ok) {
-        const xml = await res.text();
-        const items = parseRssXml(xml);
-        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
-      }
-    } catch { /* all strategies exhausted */ }
-
-  } else {
-    // Static mode — no node proxy; use rss2json then external proxies
-
-    // Strategy 1: rss2json (works on non-Replit hosted domains)
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${perFeed}`;
-      const res = await fetch(apiUrl, { signal: controller.signal, cache: "no-store" });
-      clearTimeout(timer);
-      if (res.ok) {
-        const data = await res.json() as Rss2JsonResponse;
-        if (data.status === "ok" && Array.isArray(data.items) && data.items.length > 0) {
-          return { items: data.items.slice(0, perFeed), strategy: "rss2json" };
-        }
-      }
-    } catch { /* fall through */ }
-
-    // Strategy 2: allorigins
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
-      const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
-      clearTimeout(timer);
-      if (res.ok) {
-        const xml = await res.text();
-        if (xml.trim().startsWith("<")) {
-          const items = parseRssXml(xml);
-          if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "allorigins" };
-        }
-      }
-    } catch { /* fall through */ }
-
-    // Strategy 3: corsproxy.io
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`, { signal: controller.signal, cache: "no-store" });
-      clearTimeout(timer);
-      if (res.ok) {
-        const xml = await res.text();
-        const items = parseRssXml(xml);
-        if (items.length > 0) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
-      }
-    } catch { /* all strategies exhausted */ }
+    } catch { /* fall through to public proxies */ }
   }
+
+  // Strategy 1: rss2json — handles most feeds cleanly, returns structured JSON
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), T);
+    const res = await fetch(
+      `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=${perFeed}`,
+      { signal: ctrl.signal, cache: "no-store" }
+    );
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json() as Rss2JsonResponse;
+      if (data.status === "ok" && Array.isArray(data.items) && data.items.length > 0) {
+        return { items: data.items.slice(0, perFeed), strategy: "rss2json" };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Strategy 2: AllOrigins GET — returns {contents: "<xml>..."}, different rate-limit pool
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), T);
+    const res = await fetch(
+      `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+      { signal: ctrl.signal, cache: "no-store" }
+    );
+    clearTimeout(timer);
+    if (res.ok) {
+      const data = await res.json() as { contents?: string };
+      if (data.contents) {
+        const items = asXml(data.contents);
+        if (items) return { items: items.slice(0, perFeed), strategy: "allorigins-get" };
+      }
+    }
+  } catch { /* fall through */ }
+
+  // Strategy 3: AllOrigins RAW — direct XML passthrough
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), T);
+    const res = await fetch(
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+      { signal: ctrl.signal, cache: "no-store" }
+    );
+    clearTimeout(timer);
+    if (res.ok) {
+      const items = asXml(await res.text());
+      if (items) return { items: items.slice(0, perFeed), strategy: "allorigins-raw" };
+    }
+  } catch { /* fall through */ }
+
+  // Strategy 4: corsproxy.io — independent relay, different origin
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), T);
+    const res = await fetch(
+      `https://corsproxy.io/?${encodeURIComponent(url)}`,
+      { signal: ctrl.signal, cache: "no-store" }
+    );
+    clearTimeout(timer);
+    if (res.ok) {
+      const items = asXml(await res.text());
+      if (items) return { items: items.slice(0, perFeed), strategy: "corsproxy" };
+    }
+  } catch { /* all strategies exhausted */ }
 
   throw new Error("ALL_STRATEGIES_EXHAUSTED");
 }
 
-async function collectSignals(proxyMode: "node" | "static"): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
+/* ─── Signal collection — semaphore concurrency, retry, static-resilient ────
+   MAX_CONCURRENCY = 5 prevents proxy rate-limit collapse in production.
+   Each feed gets 2 attempts. Results are merged after all feeds settle.
+─────────────────────────────────────────────────────────────────────────── */
+async function collectSignals(proxyMode: "node" | "static-resilient"): Promise<{ signals: FeedEvent[]; stats: SignalPipelineStats }> {
   const PER_FEED = 25;
-  const BATCH_SIZE = 20;
+  const MAX_CONCURRENCY = 5;
   const started = Date.now();
 
   const feedHealth: FeedHealth[] = [];
@@ -385,71 +409,72 @@ async function collectSignals(proxyMode: "node" | "static"): Promise<{ signals: 
   let parsedCount = 0;
   const rejectionBreakdown: Record<string, number> = {};
   const strategyCounts: Record<string, number> = {};
-
-  const allBatches: Array<{ url: string; domain: string }[]> = [];
-  for (let i = 0; i < BROWSER_FEEDS.length; i += BATCH_SIZE) {
-    allBatches.push(BROWSER_FEEDS.slice(i, i + BATCH_SIZE) as { url: string; domain: string }[]);
-  }
-
   const allRawEvents: FeedEvent[] = [];
 
-  for (const batch of allBatches) {
-    const settled = await Promise.allSettled(
-      batch.map(async ({ url, domain }) => {
-        const hostName = new URL(url).hostname.replace(/^(www\.|feeds\.|rss\.|feed\.)/i, "");
-        const tier = getSourceTier(hostName);
-        const feedStart = Date.now();
+  const sem = new Semaphore(MAX_CONCURRENCY);
 
-        try {
-          const { items, strategy } = await fetchFeedItems(url, PER_FEED, proxyMode);
-          strategyCounts[strategy] = (strategyCounts[strategy] ?? 0) + 1;
+  await Promise.allSettled(
+    (BROWSER_FEEDS as ReadonlyArray<{ url: string; domain: string }>).map(async ({ url, domain }) => {
+      await sem.acquire();
+      const hostName = new URL(url).hostname.replace(/^(www\.|feeds\.|rss\.|feed\.)/i, "");
+      const tier = getSourceTier(hostName);
+      try {
+        // Two attempts — retry once on total failure
+        let result: { items: Rss2JsonItem[]; strategy: string } | null = null;
+        for (let attempt = 0; attempt < 2 && !result; attempt++) {
+          if (attempt > 0) await delay(600);
+          try { result = await fetchFeedItems(url, PER_FEED, proxyMode); } catch { /* next attempt */ }
+        }
+        if (!result) throw new Error("ALL_STRATEGIES_EXHAUSTED");
 
-          const feedItems: FeedEvent[] = [];
-          for (const item of items) {
-            rawCount++;
-            const title = (item.title ?? "").trim();
-            const summary = (item.description ?? "")
-              .replace(/<[^>]+>/g, " ")
-              .replace(/\s+/g, " ")
-              .trim()
-              .slice(0, 320);
+        const { items, strategy } = result;
+        strategyCounts[strategy] = (strategyCounts[strategy] ?? 0) + 1;
 
-            const check = checkRelevance(title, summary, tier);
-            if (!check.pass) {
-              const reason = check.reason ?? "NO_SYSTEM_RELEVANCE";
-              rejectionBreakdown[reason] = (rejectionBreakdown[reason] ?? 0) + 1;
-              continue;
-            }
+        const feedItems: FeedEvent[] = [];
+        for (const item of items) {
+          rawCount++;
+          const title = (item.title ?? "").trim();
+          const summary = (item.description ?? "")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 320);
 
-            parsedCount++;
-            let ts = new Date().toISOString();
-            try { if (item.pubDate) ts = new Date(item.pubDate).toISOString(); } catch { /* keep default */ }
-
-            feedItems.push({
-              id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              source: hostName,
-              domain: classifyDomain(title, summary, domain),
-              title,
-              summary,
-              severity: 1,
-              confidence: 70,
-              timestamp: ts,
-              sourceTier: tier,
-              sourceCount: 1,
-            });
+          const check = checkRelevance(title, summary, tier);
+          if (!check.pass) {
+            const reason = check.reason ?? "NO_SYSTEM_RELEVANCE";
+            rejectionBreakdown[reason] = (rejectionBreakdown[reason] ?? 0) + 1;
+            continue;
           }
 
-          feedHealth.push({ source: hostName, domain, success: true, itemCount: feedItems.length, lastChecked: new Date().toISOString() });
-          return feedItems;
-        } catch (err) {
-          const errorType = err instanceof Error ? err.message : "UNKNOWN";
-          feedHealth.push({ source: hostName, domain, success: false, itemCount: 0, errorType, lastChecked: new Date().toISOString() });
-          return [] as FeedEvent[];
+          parsedCount++;
+          let ts = new Date().toISOString();
+          try { if (item.pubDate) ts = new Date(item.pubDate).toISOString(); } catch { /* keep default */ }
+
+          feedItems.push({
+            id: `s-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            source: hostName,
+            domain: classifyDomain(title, summary, domain),
+            title,
+            summary,
+            severity: 1,
+            confidence: 70,
+            timestamp: ts,
+            sourceTier: tier,
+            sourceCount: 1,
+          });
         }
-      })
-    );
-    settled.forEach(r => { if (r.status === "fulfilled") allRawEvents.push(...r.value); });
-  }
+
+        allRawEvents.push(...feedItems);
+        feedHealth.push({ source: hostName, domain, success: true, itemCount: feedItems.length, lastChecked: new Date().toISOString() });
+      } catch (err) {
+        const errorType = err instanceof Error ? err.message : "UNKNOWN";
+        feedHealth.push({ source: hostName, domain, success: false, itemCount: 0, errorType, lastChecked: new Date().toISOString() });
+      } finally {
+        sem.release();
+      }
+    })
+  );
 
   const successFeeds = feedHealth.filter(f => f.success).length;
   const failFeeds = feedHealth.filter(f => !f.success).length;
@@ -592,7 +617,7 @@ export default function App() {
   const [executiveBrief, setExecutiveBrief] = useState("");
   const [loading, setLoading] = useState(false);
   const [usingFallback, setUsingFallback] = useState<"none" | "supplemented" | "full">("none");
-  const [proxyMode, setProxyMode] = useState<"node" | "static">("static");
+  const [proxyMode, setProxyMode] = useState<"node" | "static-resilient">("static-resilient");
   const [statusMessage, setStatusMessage] = useState("");
   const [pipelineStats, setPipelineStats] = useState<SignalPipelineStats>(DEFAULT_PIPELINE_STATS);
   const [rawSignalCount, setRawSignalCount] = useState(0);
@@ -629,7 +654,7 @@ export default function App() {
     try {
       // ── Proxy health check ───────────────────────────────────────────────
       let healthOk = false;
-      let resolvedProxyMode: "node" | "static" = "static";
+      let resolvedProxyMode: "node" | "static-resilient" = "static-resilient";
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 2000);
@@ -639,7 +664,7 @@ export default function App() {
           const hd = await hr.json() as { proxy?: boolean };
           if (hd.proxy === true) { healthOk = true; resolvedProxyMode = "node"; }
         }
-      } catch { /* Node server unreachable — fall back to static mode */ }
+      } catch { /* Node server unreachable — static-resilient mode */ }
 
       setProxyMode(resolvedProxyMode);
 
@@ -656,9 +681,12 @@ export default function App() {
       const liveCount = signals.length;
       const totalFeeds = stats.successFeeds + stats.failFeeds;
 
-      // Warn if static mode is under-serving
-      if (resolvedProxyMode === "static" && stats.usableCount < 300) {
-        console.warn(`[AXION] WARNING: STATIC FALLBACK — NODE PROXY OFFLINE. usable=${stats.usableCount}`);
+      // Warn if static-resilient mode is under-serving
+      if (resolvedProxyMode === "static-resilient" && stats.usableCount < 300) {
+        console.warn(
+          `[AXION] DEGRADED INGESTION — PROXY_MODE=${resolvedProxyMode} usable=${stats.usableCount} ` +
+          `feeds_ok=${stats.successFeeds}/${stats.successFeeds + stats.failFeeds} raw=${stats.rawCount}`
+        );
       }
 
       // Tiered fallback: ≥50 live = no fallback, 20-49 = supplement, <20 = full fallback
@@ -1021,8 +1049,8 @@ export default function App() {
                   : <div className="pill"><Globe size={12} /> Live feed</div>
                 }
                 <div className="pill"><Database size={12} /> Persistence active</div>
-                {proxyMode === "static" && pipelineStats.usableCount > 0 && pipelineStats.usableCount < 300 && (
-                  <div className="pill warn">STATIC FALLBACK — NODE PROXY OFFLINE</div>
+                {proxyMode === "static-resilient" && pipelineStats.usableCount > 0 && pipelineStats.usableCount < 300 && (
+                  <div className="pill warn">DEGRADED INGESTION</div>
                 )}
                 {statusMessage && <div className="pill">{statusMessage}</div>}
               </div>
